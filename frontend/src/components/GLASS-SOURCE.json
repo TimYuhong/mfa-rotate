@@ -1,0 +1,15 @@
+{
+  "component": "DialogGlass",
+  "upstream": "https://github.com/DavidHDev/react-bits",
+  "commit": "e12c22192ac7b4b452c5e2feb9b586d74765d696",
+  "path": "src/ts-tailwind/Components/GlassSurface/GlassSurface.tsx",
+  "license": "MIT + Commons Clause License Condition v1.0",
+  "license_file": "public/assets/licenses/react-bits.txt",
+  "adaptations": [
+    "SVG refraction map and RGB displacement pipeline only; no WebGL, canvas capture or shape processing",
+    "Material attaches to existing Radix dialog; no replacement of accessible interaction primitives",
+    "Reduced distortion and color separation; local white/dark material and 28px optical rim",
+    "Offset dimensions for resize stability; unsupported browsers use CSS frosted-glass fallback",
+    "Event-driven pointer specular sheen only while open; respects reduced motion and cleans up observers/events"
+  ]
+}

@@ -1,0 +1,33 @@
+name: mfa-rotate
+services:
+  web:
+    build: .
+    image: local/mfa-rotate:latest
+    restart: unless-stopped
+    ports:
+      - "${MFA_BIND_IP:-127.0.0.1}:${MFA_PORT:-8790}:8790"
+    environment:
+      MFA_LOCAL_DEV: "0"
+      MFA_MODE: ${MFA_MODE:-disabled}
+      MFA_ORIGIN: ${MFA_ORIGIN:-http://127.0.0.1:8790}
+      MFA_ACCESS_KEY: ${MFA_ACCESS_KEY:-}
+      MFA_MAX_CONCURRENT: ${MFA_MAX_CONCURRENT:-10}
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777,noexec,nosuid,nodev
+    mem_limit: ${MFA_MEMORY_LIMIT:-1536m}
+    memswap_limit: ${MFA_MEMORY_LIMIT:-1536m}
+    pids_limit: 128
+    cpus: ${MFA_CPU_LIMIT:-2.0}
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    ulimits:
+      core: {soft: 0, hard: 0}
+    stop_grace_period: 11m
+    logging:
+      driver: none
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8790/api/health',timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

@@ -1,0 +1,4 @@
+# Build context: frontend/ with a prebuilt dist/. Keep the existing backend image unchanged.
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+COPY dist/ /app/frontend/dist/

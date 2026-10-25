@@ -1,0 +1,30 @@
+{
+  "verified_at": "2026-10-25",
+  "description": "SHA-256 baseline compared with the running deployment before the first public commit. Built frontend artifacts are reproducible outputs and are not tracked.",
+  "files": {
+    "app/adapter.py": "1a0bdf33c9b5a509316691f2653451c8a5c8c7e153e9b35c78b613b1b5898c2b",
+    "app/core.py": "0f92c203aa9aec561a94f1d5a9f453783c1c67d5a21b09c52b9d172241366e1b",
+    "app/models.py": "02d6ac46544e1ec82e2252b5cd3ae50851454dfde43c672623fb7eba302cfb32",
+    "app/proxy_pool.py": "8c326df31f40e09ba66a0631cc4774b0509085e78320bf56338c4a6f18960410",
+    "app/proxy_test.py": "f3de852634ef9c4ec171140bcb5188e6ad58acb00ec70116296bd6678794808a",
+    "app/proxy_transport.py": "cace93ae96090a63d606ea69186ca65b9d9d1dd4bda833e87dba18df467408b2",
+    "app/server.py": "a3a0f8f353078cb78a5c16bf7267b27ffcadb217de5185d6177e5d983cf71ed6",
+    "app/worker.py": "22347f9989ee21181c998c9d168d9e9f4971f6be7880933a2349906d6555c4a6",
+    "app/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "vendor/auth_flow.py": "1ded60c6df762bc3742d86186799cd26f758268dd95cbe51cc6c005f40c15827",
+    "vendor/config.py": "94123c0398d2edf94afeb88d18d24dc8d9c50e6f5c0594302460a4896a0353db",
+    "vendor/fingerprint.py": "92ad3a3e8ac27118b6f009064700a693bf2bb6a2abb537f0acd374f31f1278d1",
+    "vendor/http_client.py": "8bf000d4120ef0ec5049988f43be09273223dae5323efa152910e49b5b1e797c",
+    "vendor/openai_sentinel_quickjs.js": "322422b24ca02a682b1a4999b757523485bc2e333fb99e4d3d40f129ccccbf17",
+    "vendor/protocol_session.py": "f6b306eb4b914347a54c0e33cd95355a7aead90a7862f344b19a6fc4bdb78eaa",
+    "vendor/registration_context.py": "747f2c05e07ff0092e4011092562dc8b6d3087982053860a32110b9716573fd7",
+    "vendor/sentinel.py": "b8033698cda0342b3dc0ef7d2fc069df0a229b90eb74fba28834353d23a3b72a",
+    "vendor/sentinel_quickjs.py": "60d91d0473d101e12e81f624d5892a9008f13b473193e0b7ce8ab8bdda8fa181",
+    "vendor/session_cookie.py": "086014b2fab51fadb6cf3fa27c11e936b57fa4640d30c9bb9cb69fd090767c9a",
+    "vendor/SOURCE.json": "eae6e9e87758c7a54b1b06b4d831caf76f7b40e88a332282d4f32262b0e0d065",
+    "vendor/mail_providers/__init__.py": "4493c271400cf55ae10da35bdb2286236007ef20f0c2166a5e9816e67f27daf6",
+    "frontend/dist/index.html": "30d919e705d653d0c9aa108eaba6e522b950ccf9a4b9339b471ca5c320065d55",
+    "frontend/dist/favicon.ico": "4517ace821d24ae163749ba84fc42f441efdd9d991aa29183110071d455df405",
+    "frontend/dist/assets/keyshift.png": "ec75723f399c476fb2a165ad9187291af85b439ca97fe64ab9f51c5fbf9d41e7"
+  }
+}

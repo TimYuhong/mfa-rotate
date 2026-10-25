@@ -1,0 +1,45 @@
+{
+  "auth_flow.py": {
+    "source_sha256": "9476c58e0bf38736d910ed6db8f437e10fc7a200f8e0641e6d4479052b080556",
+    "vendored_sha256": "1ded60c6df762bc3742d86186799cd26f758268dd95cbe51cc6c005f40c15827",
+    "local_modifications": ["forward validated proxy DNS mappings when creating or rebuilding authentication sessions"]
+  },
+  "config.py": {
+    "source_sha256": "74f99df1960f22a68dfc733bb2dd78d922974e3524ed6667fa7b01f0eca8af78",
+    "vendored_sha256": "94123c0398d2edf94afeb88d18d24dc8d9c50e6f5c0594302460a4896a0353db",
+    "local_modifications": ["add immutable proxy_resolve configuration for per-task DNS pinning"]
+  },
+  "fingerprint.py": {
+    "source_sha256": "92ad3a3e8ac27118b6f009064700a693bf2bb6a2abb537f0acd374f31f1278d1",
+    "vendored_sha256": "92ad3a3e8ac27118b6f009064700a693bf2bb6a2abb537f0acd374f31f1278d1"
+  },
+  "http_client.py": {
+    "source_sha256": "dde3e19ba557007b8acd7d20a4cbf9ab38b12e2002cd458cd06677bcb4e398f3",
+    "vendored_sha256": "8bf000d4120ef0ec5049988f43be09273223dae5323efa152910e49b5b1e797c",
+    "local_modifications": ["accept validated proxy DNS mappings via CURLOPT_RESOLVE; fail closed if pinning is unavailable"]
+  },
+  "registration_context.py": {
+    "source_sha256": "747f2c05e07ff0092e4011092562dc8b6d3087982053860a32110b9716573fd7",
+    "vendored_sha256": "747f2c05e07ff0092e4011092562dc8b6d3087982053860a32110b9716573fd7"
+  },
+  "protocol_session.py": {
+    "source_sha256": "f6b306eb4b914347a54c0e33cd95355a7aead90a7862f344b19a6fc4bdb78eaa",
+    "vendored_sha256": "f6b306eb4b914347a54c0e33cd95355a7aead90a7862f344b19a6fc4bdb78eaa"
+  },
+  "session_cookie.py": {
+    "source_sha256": "086014b2fab51fadb6cf3fa27c11e936b57fa4640d30c9bb9cb69fd090767c9a",
+    "vendored_sha256": "086014b2fab51fadb6cf3fa27c11e936b57fa4640d30c9bb9cb69fd090767c9a"
+  },
+  "sentinel.py": {
+    "source_sha256": "b8033698cda0342b3dc0ef7d2fc069df0a229b90eb74fba28834353d23a3b72a",
+    "vendored_sha256": "b8033698cda0342b3dc0ef7d2fc069df0a229b90eb74fba28834353d23a3b72a"
+  },
+  "sentinel_quickjs.py": {
+    "source_sha256": "60d91d0473d101e12e81f624d5892a9008f13b473193e0b7ce8ab8bdda8fa181",
+    "vendored_sha256": "60d91d0473d101e12e81f624d5892a9008f13b473193e0b7ce8ab8bdda8fa181"
+  },
+  "openai_sentinel_quickjs.js": {
+    "source_sha256": "322422b24ca02a682b1a4999b757523485bc2e333fb99e4d3d40f129ccccbf17",
+    "vendored_sha256": "322422b24ca02a682b1a4999b757523485bc2e333fb99e4d3d40f129ccccbf17"
+  }
+}

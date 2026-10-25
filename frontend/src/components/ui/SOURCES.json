@@ -1,0 +1,108 @@
+{
+  "registry": "shadcn/ui official New York registry",
+  "license": "MIT",
+  "components": [
+    {
+      "component": "switch",
+      "url": "https://ui.shadcn.com/r/styles/new-york/switch.json",
+      "local_file": "src/components/ui/switch.tsx",
+      "customizations": ["project-relative import paths", "business label wraps a 44px touch target"]
+    },
+    {
+      "component": "progress",
+      "url": "https://ui.shadcn.com/r/styles/new-york/progress.json",
+      "local_file": "src/components/ui/progress.tsx",
+      "customizations": [
+        "project-relative import paths",
+        "forward value to Radix Root for determinate ARIA progress",
+        "indicator data attribute for scoped task outcome colors",
+        "200ms transform-only transition"
+      ]
+    },
+    {
+      "component": "button",
+      "url": "https://ui.shadcn.com/r/styles/new-york/button.json",
+      "local_file": "src/components/ui/button.tsx",
+      "customizations": [
+        "project-relative import paths",
+        "44px default and icon touch targets",
+        "project plain action variant: transparent hit area, icon-only hover/press and keyboard focus; original variants retained"
+      ]
+    },
+    {
+      "component": "input",
+      "url": "https://ui.shadcn.com/r/styles/new-york/input.json",
+      "local_file": "src/components/ui/input.tsx",
+      "customizations": [
+        "project-relative import paths",
+        "44px input height"
+      ]
+    },
+    {
+      "component": "textarea",
+      "url": "https://ui.shadcn.com/r/styles/new-york/textarea.json",
+      "local_file": "src/components/ui/textarea.tsx",
+      "customizations": [
+        "project-relative import paths"
+      ]
+    },
+    {
+      "component": "card",
+      "url": "https://ui.shadcn.com/r/styles/new-york/card.json",
+      "local_file": "src/components/ui/card.tsx",
+      "customizations": [
+        "project-relative import paths"
+      ]
+    },
+    {
+      "component": "tabs",
+      "url": "https://ui.shadcn.com/r/styles/new-york/tabs.json",
+      "local_file": "src/components/ui/tabs.tsx",
+      "customizations": [
+        "project-relative import paths"
+      ]
+    },
+    {
+      "component": "alert-dialog",
+      "url": "https://ui.shadcn.com/r/styles/new-york/alert-dialog.json",
+      "local_file": "src/components/ui/alert-dialog.tsx",
+      "customizations": [
+        "project-relative import paths",
+        "project glass overlay class; Radix interaction behavior retained"
+      ]
+    },
+    {
+      "component": "checkbox",
+      "url": "https://ui.shadcn.com/r/styles/new-york/checkbox.json",
+      "local_file": "src/components/ui/checkbox.tsx",
+      "customizations": [
+        "project-relative import paths"
+      ]
+    },
+    {
+      "component": "label",
+      "url": "https://ui.shadcn.com/r/styles/new-york/label.json",
+      "local_file": "src/components/ui/label.tsx",
+      "customizations": [
+        "project-relative import paths"
+      ]
+    },
+    {
+      "component": "badge",
+      "url": "https://ui.shadcn.com/r/styles/new-york/badge.json",
+      "local_file": "src/components/ui/badge.tsx",
+      "customizations": [
+        "project-relative import paths"
+      ]
+    },
+    {
+      "component": "alert",
+      "url": "https://ui.shadcn.com/r/styles/new-york/alert.json",
+      "local_file": "src/components/ui/alert.tsx",
+      "customizations": [
+        "project-relative import paths",
+        "remove legacy icon-adjacent text translation; business status banners handle centering"
+      ]
+    }
+  ]
+}
