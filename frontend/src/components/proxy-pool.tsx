@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Globe2, LoaderCircle, Shuffle, Trash2 } from "lucide-react";
 import { Button, Card, Label, Textarea } from "./ui";
 import { Switch } from "./ui/switch";
@@ -7,8 +7,9 @@ import { DialogGlass } from "./dialog-glass";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./ui/alert-dialog";
 
-export function ProxyPoolCard({ pool, busy }: { pool: ReturnType<typeof useProxyPool>; busy: boolean }) {
+export function ProxyPoolCard({ pool, busy, onDialogChange }: { pool: ReturnType<typeof useProxyPool>; busy: boolean; onDialogChange?: (open: boolean) => void }) {
   const [confirmClear, setConfirmClear] = useState(false);
+  useEffect(() => { onDialogChange?.(confirmClear); return () => onDialogChange?.(false); }, [confirmClear, onDialogChange]);
   const parsed = pool.parsed, locked = busy || pool.working || !pool.loaded;
   return <Card className="proxy-card" aria-label="代理池">
     <div className="card-title">

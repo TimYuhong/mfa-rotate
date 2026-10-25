@@ -1,6 +1,7 @@
 export type ResultRecord = {
   id: string;
   email: string;
+  password?: string; // Optional for legacy records; stored only inside AES-GCM ciphertext.
   new_secret: string;
   factor_id: string;
   state: string;
@@ -110,6 +111,8 @@ export async function save(record: ResultRecord) {
   const restored = await get(record.id);
   if (restored?.new_secret !== record.new_secret)
     throw new Error("新密钥本机读回核验失败");
+  if (record.password !== undefined && restored.password !== record.password)
+    throw new Error("账号凭证本机读回核验失败");
 }
 export async function get(id: string): Promise<ResultRecord | undefined> {
   const v = await read("results", id);

@@ -13,6 +13,11 @@ async function main() {
   let release = false, maximum = 0, cancelCalls = 0, loseRetryResponse = true, releaseBulk = false;
   const operationLookups = [];
   const secret = 'KRUGS4ZANFZSAYJAORSXG5BAONSWG4TF';
+  const dismissNotice = async () => {
+    await page.locator('[data-feedback-dialog]').waitFor();
+    await page.getByRole('button', { name: '关闭提示', exact: true }).click();
+    await page.locator('[data-feedback-dialog]').waitFor({ state: 'detached' });
+  };
   const assertCounts = async expected => {
     await page.waitForFunction(values => Object.entries(values).every(([category, value]) =>
       document.querySelector(`[data-task-filter="${category}"] .filter-count`)?.textContent === String(value)), expected);
@@ -117,7 +122,7 @@ async function main() {
       blur: getComputedStyle(overlay).backdropFilter,
     }));
     assert(!glass.background.includes('0, 0, 0'), JSON.stringify(glass));
-    assert(glass.blur.includes('blur'), JSON.stringify(glass));
+    assert.equal(glass.blur, 'none', 'The overlay must not pre-blur the entire page');
     await page.waitForFunction(() => document.querySelector('.glass-dialog')?.dataset.glassMode === 'lens');
     const lens = await page.locator('.glass-dialog').evaluate(panel => ({
       filter: getComputedStyle(panel.querySelector('.glass-warp')).filter,
@@ -127,16 +132,34 @@ async function main() {
       canvasCount: panel.querySelectorAll('canvas').length,
       background: getComputedStyle(panel.querySelector('.glass-tint')).backgroundImage,
     }));
-    assert(lens.filter.includes('url(') && lens.radius === '28px' && lens.displacement === '/assets/liquid-glass-displacement.jpg', 'Pinned upstream SVG lens is active');
+    assert(lens.filter.includes('url(') && lens.radius === '28px' && lens.displacement === '/assets/liquid-glass-prominent.png', 'Pinned upstream SVG lens is active');
     assert.equal(lens.source, 'rdev/liquid-glass-react');
     assert.equal(lens.canvasCount, 0, 'No WebGL/canvas renderer');
     assert.notEqual(lens.background, 'none', 'Optical material must not be replaced by an opaque OS fallback');
     await page.getByRole('alertdialog').evaluate(panel => Promise.all(panel.getAnimations().map(animation => animation.finished)));
+    const overflow = await page.getByRole('alertdialog').evaluate(panel => ({
+      extraHeight: panel.scrollHeight - panel.clientHeight, extraWidth: panel.scrollWidth - panel.clientWidth,
+      scrollbar: getComputedStyle(panel).scrollbarWidth,
+    }));
+    assert(overflow.extraHeight <= 1 && overflow.extraWidth <= 1 && overflow.scrollbar === 'none', JSON.stringify(overflow));
+    await page.evaluate(() => scrollTo(0, 0));
+    await page.mouse.move(1200, 800);
+    await page.mouse.wheel(0, 220);
+    await page.waitForFunction(() => scrollY > 100);
+    assert.equal(await page.getByRole('alertdialog').isVisible(), true, 'Background scrolling keeps the dialog open');
+    assert.equal(await page.evaluate(() => document.body.getAttribute('data-scroll-locked')), null);
+    const rimTransform = await page.locator('.glass-rim-flow').evaluate(rim => {
+      const style = getComputedStyle(rim, '::before');
+      if (style.animationName !== 'glass-rim-orbit' || style.animationPlayState !== 'running') throw new Error('Rim shimmer is not running');
+      return style.transform;
+    });
+    await page.waitForFunction(previous => getComputedStyle(document.querySelector('.glass-rim-flow'), '::before').transform !== previous, rimTransform);
     const panelBox = await page.getByRole('alertdialog').boundingBox();
     await page.mouse.move(panelBox.x + panelBox.width * 0.7, panelBox.y + panelBox.height * 0.3);
     await page.waitForFunction(() => parseFloat(document.querySelector('.glass-dialog').style.getPropertyValue('--glass-light-x')) > 60);
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.waitForFunction(() => document.querySelector('.glass-dialog').style.getPropertyValue('--glass-light-x') === '25%');
+    assert.equal(await page.locator('.glass-rim-flow').evaluate(rim => getComputedStyle(rim, '::before').animationName), 'none');
     await page.mouse.move(panelBox.x + panelBox.width * 0.9, panelBox.y + panelBox.height * 0.5);
     assert.equal(await page.locator('.glass-dialog').evaluate(panel => panel.style.getPropertyValue('--glass-light-x')), '25%');
     const refracted = await page.getByRole('alertdialog').screenshot({ animations: 'disabled' });
@@ -307,6 +330,7 @@ async function main() {
     const rows = Buffer.concat(chunks).toString('utf8').trim().split('\r\n');
     assert.equal(rows.length, 23);
     assert(rows.every(line => line.includes(`---fake-password---${secret}`)));
+    await dismissNotice();
     assert.equal(await page.locator('.saved-entry').count(), 10);
     const selectedEmails = await page.locator('.saved-account > span:last-child').allTextContents();
     await savedCard.getByRole('checkbox').nth(0).check();
@@ -329,6 +353,7 @@ async function main() {
     const selectedLines = Buffer.concat(selectedChunks).toString('utf8').trim().split('\r\n');
     assert.deepEqual(selectedLines.map(line => line.split('---')[0]).sort(), selectedEmails.sort());
     assert(selectedLines.every(line => line.endsWith(`---fake-password---${secret}`)));
+    await dismissNotice();
     await savedPager.getByRole('button', { name: '上一页', exact: true }).click();
     assert.equal(await savedCard.getByRole('checkbox').nth(0).isChecked(), true);
     assert.equal(await savedCard.getByRole('checkbox').nth(1).isChecked(), true);
@@ -348,6 +373,7 @@ async function main() {
     const selectAllStream = await selectAllDownload.createReadStream(), selectAllChunks = [];
     for await (const chunk of selectAllStream) selectAllChunks.push(chunk);
     assert.equal(Buffer.concat(selectAllChunks).toString('utf8').trim().split('\r\n').length, 23);
+    await dismissNotice();
     await savedCard.getByRole('button', { name: '取消选择（23）', exact: true }).click();
     assert.equal(await savedCard.getByRole('button', { name: '全选', exact: true }).isEnabled(), true);
     await savedPager.getByRole('button', { name: '上一页', exact: true }).click();
@@ -358,6 +384,7 @@ async function main() {
     const allSavedStream = await allSavedDownload.createReadStream(), allSavedChunks = [];
     for await (const chunk of allSavedStream) allSavedChunks.push(chunk);
     assert.equal(Buffer.concat(allSavedChunks).toString('utf8').trim().split('\r\n').length, 23);
+    await dismissNotice();
     await page.getByRole('button', { name: '纯白', exact: true }).click();
     await savedCard.getByRole('checkbox').first().check();
     await savedCard.evaluate(el => el.scrollIntoView({ block: 'start' }));
@@ -391,51 +418,30 @@ async function main() {
     await page.getByRole('tab', { name: '单个账号', exact: true }).click();
     await page.getByRole('button', { name: '开始更换', exact: true }).click();
     await page.getByRole('button', { name: '关闭错误提示', exact: true }).waitFor();
-    const assertCloseCentered = async () => {
-      const delta = await page.getByRole('button', { name: '关闭错误提示', exact: true }).evaluate(button => {
-        const b = button.getBoundingClientRect(), icon = button.querySelector('svg').getBoundingClientRect();
-        const bannerElement = button.parentElement, banner = bannerElement.getBoundingClientRect();
-        const text = bannerElement.querySelector(':scope > div').getBoundingClientRect();
-        const statusIcon = bannerElement.querySelector(':scope > svg').getBoundingClientRect();
-        return { x: Math.abs(b.x + b.width / 2 - icon.x - icon.width / 2),
-          y: Math.abs(b.y + b.height / 2 - icon.y - icon.height / 2),
-          bannerY: Math.abs(b.y + b.height / 2 - banner.y - banner.height / 2),
-          textY: Math.abs(text.y + text.height / 2 - banner.y - banner.height / 2),
-          iconY: Math.abs(statusIcon.y + statusIcon.height / 2 - banner.y - banner.height / 2) };
-      });
-      assert(Object.values(delta).every(value => value < 1), JSON.stringify(delta));
-    };
-    await assertCloseCentered();
+    assert.equal(await page.locator('.status-dismissible').count(), 0, 'Global feedback must not render a page banner');
+    const feedback = page.locator('[data-feedback-dialog]');
+    await feedback.waitFor();
     for (const theme of ['纯白', '深色']) {
-      await page.getByRole('button', { name: theme, exact: true }).click();
+      await page.evaluate(value => {
+        document.documentElement.dataset.appearance = value;
+        document.documentElement.classList.toggle('dark', value === 'dark');
+      }, theme === '纯白' ? 'light' : 'dark');
       for (const width of [320, 375, 812, 1440]) {
         await page.setViewportSize({ width, height: 900 });
-        await assertCloseCentered();
-        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `Overflow ${theme} ${width}`);
+        await page.waitForFunction(() => {
+          const b = document.querySelector('[data-feedback-dialog]')?.getBoundingClientRect();
+          return b && b.left >= 15 && b.right <= innerWidth - 15;
+        });
+        const box = await feedback.boundingBox();
+        assert(box.x >= 15 && box.x + box.width <= width - 15, JSON.stringify({ width, box }));
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
       }
     }
-    await page.getByRole('button', { name: '纯白', exact: true }).click();
-    await page.evaluate(() => window.scrollTo(0, 500));
-    const layout = await page.locator('.workspace').evaluate(workspace => {
-      const input = workspace.querySelector('.input-card').getBoundingClientRect();
-      const result = workspace.querySelector('.right-column').getBoundingClientRect();
-      return { ratio: input.width / (input.width + result.width), inputTop: input.top };
-    });
-    assert(layout.ratio > 0.40 && layout.ratio < 0.44, JSON.stringify(layout));
-    assert(Math.abs(layout.inputTop - 24) < 1, JSON.stringify(layout));
-    await page.evaluate(() => window.scrollTo(0, 0));
-    await page.screenshot({ path: 'output/playwright/pagination-layout-light.png', animations: 'disabled' });
-    await page.locator('.status-dismissible[role="alert"]').screenshot({ path: 'output/playwright/status-banner-aligned-light.png', animations: 'disabled' });
-    await page.getByRole('button', { name: '深色', exact: true }).click();
-    await taskPager.evaluate(el => el.scrollIntoView({ block: 'end' }));
-    await page.screenshot({ path: 'output/playwright/pagination-footer-dark.png', animations: 'disabled' });
-    await page.setViewportSize({ width: 375, height: 812 });
-    await page.evaluate(() => window.scrollTo(0, 0));
-    await page.screenshot({ path: 'output/playwright/pagination-mobile.png', animations: 'disabled' });
-    await page.locator('.status-dismissible[role="alert"]').screenshot({ path: 'output/playwright/status-banner-aligned-mobile-dark.png', animations: 'disabled' });
-    await taskPager.evaluate(el => el.scrollIntoView({ block: 'end' }));
-    await page.screenshot({ path: 'output/playwright/pagination-mobile-footer.png', animations: 'disabled' });
+    await feedback.screenshot({ path: 'output/playwright/feedback-glass-dark.png', animations: 'disabled' });
     await page.getByRole('button', { name: '关闭错误提示', exact: true }).click();
+    await feedback.waitFor({ state: 'detached' });
+    await page.getByRole('button', { name: '纯白', exact: true }).click();
+    await page.setViewportSize({ width: 1440, height: 1000 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     assert.equal(await page.locator('[data-progress-indicator]').first().evaluate(el => parseFloat(getComputedStyle(el).transitionDuration) < 0.01), true);
     await page.locator('[data-task-filter="all"]').click();
@@ -458,6 +464,7 @@ async function main() {
     await page.locator('[data-task-filter="failed"]').click();
     await page.getByRole('button', { name: '重试失败', exact: true }).evaluate(button => { button.click(); button.click(); });
     await page.getByText('已将 2 个失败任务加入队列', { exact: true }).waitFor();
+    await dismissNotice();
     await page.waitForFunction(() => document.querySelectorAll('.result-row').length === 1);
     assert.equal(await page.getByRole('button', { name: '重试失败', exact: true }).isDisabled(), true);
     await page.locator('[data-task-filter="queued"]').click();
@@ -513,6 +520,54 @@ async function main() {
     await page.reload();
     await page.waitForFunction(count => document.querySelector('.saved-card .count')?.textContent === String(count), storedBeforeReload.results.length);
     assert.deepEqual((await inspectStorage(page)).results, storedBeforeReload.results, 'Reload must retain saved results');
+    const readDecrypted = () => page.evaluate(async () => {
+      const db = await new Promise((resolve, reject) => { const request = indexedDB.open('keyshift-local-results-v1', 1); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+      const raw = await new Promise((resolve, reject) => {
+        const tx = db.transaction(['results', 'keys'], 'readonly');
+        const records = tx.objectStore('results').getAll(), key = tx.objectStore('keys').get('aes');
+        tx.oncomplete = () => resolve({ records: records.result, key: key.result }); tx.onerror = () => reject(tx.error);
+      }); db.close();
+      const decoded = await Promise.all(raw.records.map(async record => JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: record.iv }, raw.key, record.encrypted)))));
+      return { decoded, encryptedOnly: raw.records.every(record => Object.keys(record).sort().join(',') === 'encrypted,iv' && record.encrypted instanceof ArrayBuffer) };
+    });
+    const decrypted = await readDecrypted();
+    assert(decrypted.encryptedOnly, 'Passwords and keys must never appear as plaintext IDB fields');
+    assert(decrypted.decoded.every(record => record.password === 'fake-password'), 'All new records retain the password within encryption');
+    assert.equal(await page.getByLabel('账号凭证', { exact: true }).inputValue(), '');
+    assert.equal(await page.locator('.saved-card').innerText().then(text => text.includes('fake-password')), false, 'Do not render saved passwords');
+    const exportRestored = async () => {
+      const pending = page.waitForEvent('download');
+      await savedCard.getByRole('button', { name: '导出成功 TXT', exact: true }).click();
+      const file = await pending, stream = await file.createReadStream(), chunks = [];
+      for await (const chunk of stream) chunks.push(chunk);
+      const lines = Buffer.concat(chunks).toString('utf8').trim().split('\r\n');
+      assert.equal(lines.length, storedBeforeReload.results.length);
+      assert(lines.every(line => line.includes('---fake-password---')));
+      await file.delete(); await dismissNotice();
+    };
+    await exportRestored();
+    // Simulate one pre-upgrade ciphertext that contained no password.
+    const legacyEmail = decrypted.decoded[0].email;
+    await page.evaluate(async id => {
+      const db = await new Promise(resolve => { const request = indexedDB.open('keyshift-local-results-v1', 1); request.onsuccess = () => resolve(request.result); });
+      const old = await new Promise(resolve => { const tx = db.transaction(['results', 'keys'], 'readonly'); const record = tx.objectStore('results').get(id), key = tx.objectStore('keys').get('aes'); tx.oncomplete = () => resolve({ record: record.result, key: key.result }); });
+      const value = JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: old.record.iv }, old.key, old.record.encrypted))); delete value.password;
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, old.key, new TextEncoder().encode(JSON.stringify(value)));
+      await new Promise((resolve, reject) => { const tx = db.transaction('results', 'readwrite'); tx.objectStore('results').put({ iv, encrypted }, id); tx.oncomplete = resolve; tx.onerror = () => reject(tx.error); }); db.close();
+    }, decrypted.decoded[0].id);
+    await page.reload();
+    await page.waitForFunction(count => document.querySelector('.saved-card .count')?.textContent === String(count), storedBeforeReload.results.length);
+    await savedCard.getByRole('button', { name: '导出成功 TXT', exact: true }).click();
+    await page.locator('[data-feedback-dialog]').getByText('旧结果缺少密码。', { exact: false }).waitFor();
+    await page.getByRole('button', { name: '关闭错误提示', exact: true }).click();
+    await page.getByLabel('账号凭证', { exact: true }).fill(`${legacyEmail}---fake-password---JBSWY3DPEHPK3PXP`);
+    await exportRestored();
+    assert((await readDecrypted()).decoded.every(record => record.password === 'fake-password'));
+    await page.reload();
+    await page.waitForFunction(count => document.querySelector('.saved-card .count')?.textContent === String(count), storedBeforeReload.results.length);
+    await exportRestored();
+    assert.equal(calls.length, callsBeforeClear, 'Restored export and legacy backfill must not call account APIs');
     await savedCard.getByRole('button', { name: '清空结果', exact: true }).click();
     await page.getByRole('alertdialog').getByText('清空后无法恢复', { exact: false }).waitFor();
     await page.setViewportSize({ width: 375, height: 812 });
@@ -560,10 +615,11 @@ async function main() {
       successfulTxtRows: rows.length, stageProgressVerified: true, independentPagination: true,
       taskControlsSeparatedAcrossThemesAndWidths: true, taskCountsAcrossPaginationAndRetries: true,
       pageSizes: [10, 20, 50], clampedAfterDeletion: true, closeIconCentered: true,
-      savedSelectionAcrossPages: true, selectedExportRows: selectedLines.length, bannerTextAndIconsCentered: true,
+      savedSelectionAcrossPages: true, selectedExportRows: selectedLines.length, glassFeedbackInsteadOfBanner: true,
       selectAllAcrossPages: true, svgRefractionMaterial: true, actualRefractionPixelsChanged: true, reducedMotionGlintDisabled: true,
       unsupportedEngineFallback: true, forcedColorsFallback: true,
-      refreshRetainsResults: true, confirmedClearAll: true, failedClearAtomic: true, encryptionKeyAndAppearanceRetained: true,
+      refreshRetainsResults: true, refreshExportsCompleteCredentials: true, encryptedPasswordBackfill: true, backgroundWheelScrollWithDialog: true,
+      confirmedClearAll: true, failedClearAtomic: true, encryptionKeyAndAppearanceRetained: true,
       transparentGlassDialog: true, runningAndWaitingFilters: true, bulkRetryJoinedSharedQueue: true,
       unsafeMutationNotRetried: true, realAccountRequests: 0 }));
   } catch (error) {

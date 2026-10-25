@@ -68,7 +68,8 @@
       "local_file": "src/components/ui/alert-dialog.tsx",
       "customizations": [
         "project-relative import paths",
-        "project glass overlay class; Radix interaction behavior retained"
+        "plain project overlay replaces Primitive.Overlay to allow native page scrolling; Radix Content retains modal focus and outside-click protection",
+        "project glass material and feedback dialog composition; labels and confirmation actions retained"
       ]
     },
     {

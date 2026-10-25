@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
-  Check,
   CheckCircle2,
   Download,
   ArrowRight,
@@ -20,7 +19,6 @@ import {
   Clock3,
   Trash2,
   Upload,
-  WifiOff,
   X,
 } from "lucide-react";
 import {
@@ -40,6 +38,7 @@ import {
   Textarea,
 } from "./components/ui";
 import { Confirm, ClearResultConfirm } from "./components/confirm-rotation";
+import { FeedbackDialog } from "./components/feedback-dialog";
 import { parseLines, parseSingle, type Credential } from "./parser";
 import { credentialText } from "./export";
 import { readCredentialFile } from "./import-file";
@@ -193,6 +192,7 @@ function App() {
     [clearCandidate, setClearCandidate] = useState<vault.ResultRecord | null>(null),
     [confirmClearAll, setConfirmClearAll] = useState(false),
     [clearingSaved, setClearingSaved] = useState(false),
+    [proxyDialogOpen, setProxyDialogOpen] = useState(false),
     [rows, setRows] = useState<Row[]>([]),
     [saved, setSaved] = useState<vault.ResultRecord[]>([]),
     [selectedSaved, setSelectedSaved] = useState<string[]>([]),
@@ -227,11 +227,6 @@ function App() {
     window.addEventListener("mfa-session-expired", expired);
     return () => window.removeEventListener("mfa-session-expired", expired);
   }, []);
-  useEffect(() => {
-    if (!notice) return;
-    const timer = window.setTimeout(() => setNotice(""), 4000);
-    return () => clearTimeout(timer);
-  }, [notice]);
   useEffect(() => {
     api("/capabilities")
       .then(setCaps)
@@ -283,17 +278,21 @@ function App() {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     setNotice("已发起下载");
   };
-  const download = (records: vault.ResultRecord[]) => {
+  const download = async (records: vault.ResultRecord[]) => {
     try {
       const pasted = [...parseLines(bulk), parseSingle(single)]
         .flatMap(row => row.credential ? [row.credential] : []);
-      const text = credentialText(records, record => {
+      const complete = records.filter(record => record.state === "verified").map(record => {
         const retained = exportPasswords.current.get(record.id);
-        if (retained !== undefined) return retained;
         const matches = pasted.filter(c => c.email.toLowerCase() === record.email.toLowerCase());
         const passwords = new Set(matches.map(c => c.password));
-        return passwords.size === 1 ? matches[0].password : undefined;
+        const password = retained ?? (passwords.size === 1 ? matches[0].password : record.password);
+        return { ...record, password };
       });
+      const text = credentialText(complete);
+      // Backfill old records only when a known password was provided; never rotate again.
+      await Promise.all(complete.filter(record => records.find(original => original.id === record.id)?.password !== record.password).map(record => vault.save(record)));
+      await refreshSaved();
       downloadBlob(text);
     } catch (error) {
       setError((error as Error).message);
@@ -388,6 +387,7 @@ function App() {
       patch(control.id, { stage: event.stage ?? "stopped", state: event.state, message: event.message });
       if (event.type === "secret") {
         result = { id: control.id, email: control.email, new_secret: event.new_secret,
+          password: control.credentials?.password ?? result?.password ?? exportPasswords.current.get(control.id),
           factor_id: event.factor_id, state: event.state, job_id: jobId,
           receipt: event.receipt, created_at: new Date().toISOString() };
         await vault.save(result);
@@ -405,7 +405,7 @@ function App() {
         control.outcome = outcome;
         if (!result) result = await vault.get(control.id);
         if (result) {
-          result = { ...result, job_id: jobId, state: event.state, message: event.message,
+          result = { ...result, password: control.credentials?.password ?? result.password ?? exportPasswords.current.get(control.id), job_id: jobId, state: event.state, message: event.message,
             outcome: outcome as vault.ResultRecord["outcome"], code: event.code, action: control.action };
           await vault.save(result);
           control.result = result;
@@ -530,7 +530,7 @@ function App() {
     }
     const retained = controls.current.get(row.id)?.credentials;
     if (retained) return { ...retained };
-    const password = exportPasswords.current.get(row.id);
+    const password = exportPasswords.current.get(row.id) ?? row.result?.password;
     if (password && row.result) return { email: row.email, password, totp_secret: row.result.new_secret };
   }
   async function retryRow(row: Row, confirmed = false, storageReady = false) {
@@ -702,24 +702,6 @@ function App() {
               </AlertDescription>
           </Alert>
         ) : null}
-        {error && (
-          <Alert className="status-banner status-dismissible" variant="destructive">
-            <WifiOff size={18} />
-            <AlertDescription>{error}</AlertDescription>
-            <Button variant="plain" size="icon" onClick={() => setError("")} aria-label="关闭错误提示">
-              <X size={16} />
-            </Button>
-          </Alert>
-        )}
-        {notice && (
-          <Alert className="status-banner tone-success status-dismissible" role="status">
-            <Check size={18} />
-            <AlertDescription>{notice}</AlertDescription>
-            <Button variant="plain" size="icon" onClick={() => setNotice("")} aria-label="关闭提示">
-              <X size={16} />
-            </Button>
-          </Alert>
-        )}
         {enabled && !connected && (
           <Card className="access">
             <div>
@@ -860,7 +842,7 @@ function App() {
               {!busy && <ArrowRight size={16} className="action-arrow" />}
             </Button>
           </Card>
-          <ProxyPoolCard pool={proxyPool} busy={busy} />
+          <ProxyPoolCard pool={proxyPool} busy={busy} onDialogChange={setProxyDialogOpen} />
           </div>
           <div className="right-column">
             <Card className="results-card">
@@ -1086,6 +1068,8 @@ function App() {
           </Card>
         )}
       </main>
+      <FeedbackDialog open={Boolean(error || notice) && !confirm && !confirmClearAll && !clearCandidate && !proxyDialogOpen}
+        message={error || notice} error={Boolean(error)} onClose={() => { setError(""); setNotice(""); }} />
       <Confirm
         open={confirm}
         onReturnFocus={() => { const target = confirmFocusRef.current; if (target?.isConnected && !target.disabled) target.focus(); else startButtonRef.current?.focus(); }}

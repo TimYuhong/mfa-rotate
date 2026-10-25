@@ -261,6 +261,7 @@ async function main() {
     await page.getByRole('button', { name: '清空结果', exact: true }).click();
     await page.getByRole('button', { name: '确认清空', exact: true }).click();
     await page.locator('.saved-card').waitFor({ state: 'detached' });
+    await page.getByRole('button', { name: '关闭提示', exact: true }).click();
     assert.equal((await storage(page)).exists, true, 'Clearing results preserves the separate proxy vault');
     await page.getByRole('button', { name: '清空代理池', exact: true }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: '取消', exact: true }).click();

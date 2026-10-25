@@ -279,9 +279,8 @@ h1 { margin: 0; font-size: 24px; line-height: 1.4; font-weight: 600; letter-spac
 
 /* rdev/liquid-glass-react material, kept behind Radix content. See GLASS-SOURCE.json. */
 .glass-dialog-overlay {
-  background: rgb(242 246 250 / 0.04);
-  -webkit-backdrop-filter: blur(1px);
-  backdrop-filter: blur(1px);
+  background: rgb(242 246 250 / 0.025);
+  touch-action: pan-y pinch-zoom;
 }
 .glass-dialog {
   isolation: isolate;
@@ -289,14 +288,23 @@ h1 { margin: 0; font-size: 24px; line-height: 1.4; font-weight: 600; letter-spac
   border-radius: 28px;
   padding: 30px;
   gap: 26px;
+  width: min(32rem, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  scrollbar-width: none;
   border-color: rgb(255 255 255 / 0.68);
   background: transparent;
   box-shadow: 0 24px 72px rgb(28 36 50 / 0.13), 0 6px 20px rgb(28 36 50 / 0.06), 0 0 0 0.5px rgb(22 28 40 / 0.06);
 }
+.glass-dialog::-webkit-scrollbar { display: none; }
 .glass-dialog > .glass-warp, .glass-dialog > .glass-tint { position: absolute; inset: 0; z-index: 0; border-radius: inherit; pointer-events: none; }
 .glass-warp { -webkit-backdrop-filter: blur(18px) saturate(1.25); backdrop-filter: blur(18px) saturate(1.25); }
-.glass-dialog[data-glass-mode="lens"] > .glass-warp { filter: var(--glass-lens); -webkit-backdrop-filter: blur(4px) saturate(1.3); backdrop-filter: blur(4px) saturate(1.3); }
-.glass-tint { background: linear-gradient(150deg, rgb(255 255 255 / 0.65), rgb(255 255 255 / 0.28) 48%, rgb(255 255 255 / 0.4)), rgb(249 251 255 / 0.62); }
+.glass-dialog[data-glass-mode="lens"] > .glass-warp { filter: var(--glass-lens); -webkit-backdrop-filter: blur(7px) saturate(1.4); backdrop-filter: blur(7px) saturate(1.4); }
+.glass-tint { background: radial-gradient(ellipse at 50% 42%, rgb(255 255 255 / 0.66), rgb(255 255 255 / 0.5) 45%, rgb(255 255 255 / 0.06)), rgb(249 251 255 / 0.32); }
+.glass-dialog > .glass-rim-flow { position: absolute; inset: 0; z-index: 2; border-radius: inherit; padding: 1.4px; overflow: hidden; pointer-events: none; -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+.glass-rim-flow::before { content: ""; position: absolute; inset: -100%; background: conic-gradient(from 0deg, transparent 0deg 250deg, rgb(198 226 217 / 0.12) 276deg, rgb(255 255 255 / 0.92) 298deg, rgb(213 234 244 / 0.3) 314deg, transparent 338deg 360deg); animation: glass-rim-orbit 8s linear infinite; }
+.glass-dialog[data-glass-paused="true"] .glass-rim-flow::before { animation-play-state: paused; }
+@keyframes glass-rim-orbit { to { transform: rotate(360deg); } }
 .glass-dialog::before {
   content: ""; position: absolute; inset: 0; padding: 1.5px; border-radius: inherit; pointer-events: none;
   z-index: 2;
@@ -312,7 +320,7 @@ h1 { margin: 0; font-size: 24px; line-height: 1.4; font-weight: 600; letter-spac
   background: radial-gradient(ellipse at var(--glass-light-x, 25%) var(--glass-light-y, 0%), rgb(255 255 255 / 0.18), transparent 60%);
 }
 .glass-dialog > * { position: relative; z-index: 1; }
-.glass-dialog > .glass-filter-defs { position: absolute; width: 0; height: 0; pointer-events: none; }
+.glass-dialog > .glass-filter-defs { position: absolute; inset: 0; max-width: 100%; max-height: 100%; width: 0; height: 0; pointer-events: none; }
 .glass-dialog h2 { font-size: 21px; line-height: 1.35; letter-spacing: -0.5px; font-weight: 600; }
 .glass-dialog .glass-description { color: #45464d; line-height: 1.8; }
 .glass-dialog button { border-radius: 999px; min-height: 44px; padding-inline: 20px; }
@@ -323,7 +331,7 @@ h1 { margin: 0; font-size: 24px; line-height: 1.4; font-weight: 600; letter-spac
   border-color: rgb(255 255 255 / 0.2);
   box-shadow: 0 32px 100px rgb(0 0 0 / 0.34), 0 8px 28px rgb(0 0 0 / 0.18), 0 1px 1px rgb(255 255 255 / 0.28) inset, 0 -1px 1px rgb(255 255 255 / 0.06) inset;
 }
-:root[data-appearance="dark"] .glass-tint { background: linear-gradient(150deg, rgb(255 255 255 / 0.09), rgb(255 255 255 / 0.015) 48%, rgb(255 255 255 / 0.04)), rgb(20 23 29 / 0.82); }
+:root[data-appearance="dark"] .glass-tint { background: radial-gradient(ellipse at 50% 42%, rgb(16 19 24 / 0.72), rgb(16 19 24 / 0.58) 50%, rgb(16 19 24 / 0.08)), rgb(20 23 29 / 0.34); }
 :root[data-appearance="dark"] .glass-dialog::before { opacity: 0.5; }
 :root[data-appearance="dark"] .glass-dialog::after { opacity: 0.28; }
 :root[data-appearance="dark"] .glass-dialog .glass-description { color: #d5d7dc; }
@@ -334,11 +342,16 @@ h1 { margin: 0; font-size: 24px; line-height: 1.4; font-weight: 600; letter-spac
 }
 @media (forced-colors: active) {
   .glass-dialog, :root[data-appearance="dark"] .glass-dialog { background: Canvas; border-color: CanvasText; }
-  .glass-dialog > .glass-warp, .glass-dialog > .glass-tint, .glass-dialog::before, .glass-dialog::after { display: none; }
+  .glass-dialog > .glass-warp, .glass-dialog > .glass-tint, .glass-dialog > .glass-rim-flow, .glass-dialog::before, .glass-dialog::after { display: none; }
   .glass-dialog .glass-description { color: CanvasText; }
   .glass-dialog-overlay { -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
 .spin { animation: keyshift-spin 1.2s linear infinite; }
+.feedback-heading { display: flex; align-items: center; gap: 10px; }
+.feedback-dialog { width: min(28rem, calc(100vw - 32px)); }
+.feedback-heading svg { flex-shrink: 0; }
+.feedback-error { color: hsl(var(--destructive)); }
+.feedback-success { color: hsl(var(--success)); }
 @keyframes keyshift-spin { to { transform: rotate(360deg); } }
 
 /* Feedback never shifts the layout. No decorative or entrance animation. */
@@ -381,6 +394,7 @@ button:not(:disabled):active { filter: brightness(0.94); }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .glass-rim-flow::before { animation: none; }
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
 }
 @media (max-width: 480px) {

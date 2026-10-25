@@ -2,9 +2,9 @@
 // Copyright 2025 MAX ROVENSKY. MIT; see GLASS-SOURCE.json and assets/licenses/liquid-glass-react.txt.
 import { useEffect, useId, useRef } from "react";
 
-const displacementMap = "/assets/liquid-glass-displacement.jpg";
-const displacementScale = 38;
-const aberrationIntensity = 0.65;
+const displacementMap = "/assets/liquid-glass-prominent.png";
+const displacementScale = 52;
+const aberrationIntensity = 0.85;
 
 /** Background material only: Radix owns layout, focus, keyboard and confirmation. */
 export function DialogGlass() {
@@ -64,6 +64,7 @@ export function DialogGlass() {
     const reset = () => {
       cancelAnimationFrame(frame); frame = 0;
       x = 25; y = 0; paint();
+      panel.dataset.glassPaused = String(document.hidden || motion.matches);
     };
     const move = (event: PointerEvent) => {
       if (motion.matches || document.hidden || event.pointerType !== "mouse") return;
@@ -77,12 +78,14 @@ export function DialogGlass() {
     panel.addEventListener("pointerleave", reset);
     motion.addEventListener("change", reset);
     document.addEventListener("visibilitychange", reset);
+    reset();
     return () => {
       cancelAnimationFrame(frame);
       panel.removeEventListener("pointermove", move);
       panel.removeEventListener("pointerleave", reset);
       motion.removeEventListener("change", reset);
       document.removeEventListener("visibilitychange", reset);
+      delete panel.dataset.glassPaused;
       for (const name of ["--glass-light-x", "--glass-light-y", "--glass-light-angle"]) panel.style.removeProperty(name);
     };
   }, []);
@@ -92,7 +95,7 @@ export function DialogGlass() {
       <defs>
         {/* Upstream GlassFilter: preserve the clean center and refract the edge in RGB. */}
         <filter id={id} x="-35%" y="-35%" width="170%" height="170%" colorInterpolationFilters="sRGB">
-          <feImage href={displacementMap} x="0" y="0" width="100%" height="100%" result="DISPLACEMENT_MAP" preserveAspectRatio="xMidYMid slice" />
+          <feImage href={displacementMap} x="0" y="0" width="100%" height="100%" result="DISPLACEMENT_MAP" preserveAspectRatio="none" />
           <feColorMatrix in="DISPLACEMENT_MAP" type="matrix" values="0.3 0.3 0.3 0 0  0.3 0.3 0.3 0 0  0.3 0.3 0.3 0 0  0 0 0 1 0" result="EDGE_INTENSITY" />
           <feComponentTransfer in="EDGE_INTENSITY" result="EDGE_MASK">
             <feFuncA type="discrete" tableValues={`0 ${aberrationIntensity * 0.05} 1`} />
@@ -116,5 +119,6 @@ export function DialogGlass() {
     </svg>
     <span className="glass-warp" aria-hidden="true" />
     <span className="glass-tint" aria-hidden="true" />
+    <span className="glass-rim-flow" aria-hidden="true" />
   </>;
 }

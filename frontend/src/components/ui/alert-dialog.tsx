@@ -32,7 +32,8 @@ const AlertDialogContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>
 >(({ className, ...props }, ref) => (
   <AlertDialogPortal>
-    <AlertDialogOverlay className="glass-dialog-overlay" />
+    {/* Plain visual overlay: Radix Content keeps modal focus/click safety, without Overlay's RemoveScroll. */}
+    <div className="glass-dialog-overlay fixed inset-0 z-50" aria-hidden="true" style={{ pointerEvents: "auto" }} />
     <AlertDialogPrimitive.Content
       ref={ref}
       className={cn(
