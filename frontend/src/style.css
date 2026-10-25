@@ -214,7 +214,8 @@ h1 { margin: 0; font-size: 24px; line-height: 1.4; font-weight: 600; letter-spac
 .activity-dot.active { box-shadow: 0 0 0 4px hsl(var(--detail) / 0.12); }
 .result-filter { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 0 12px 12px; border-bottom: 1px solid hsl(var(--border)); }
 .result-filter > div { display: flex; flex-wrap: wrap; max-width: 100%; min-width: 0; gap: 2px; padding: 2px; border-radius: 6px; background: hsl(var(--muted)); }
-.result-filter > div button { height: 44px; min-width: 44px; padding: 0 9px; font-size: 12px; color: hsl(var(--muted-foreground)); }
+.result-filter > div button { height: 44px; min-width: 44px; padding: 0 9px; font-size: 12px; line-height: 20px; color: hsl(var(--muted-foreground)); }
+.filter-count { margin-inline-start: 5px; font: inherit; font-variant-numeric: tabular-nums; vertical-align: baseline; }
 .result-filter > div button.selected { background: hsl(var(--card)); color: hsl(var(--foreground)); }
 .result-filter > button { font-size: 12px; }
 .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 212px; padding: 24px; color: hsl(var(--muted-foreground)); font-size: 13px; }
@@ -276,11 +277,11 @@ h1 { margin: 0; font-size: 24px; line-height: 1.4; font-weight: 600; letter-spac
 .page-number { min-width: 68px; text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .saved-card > .list-pagination { margin-top: 12px; padding: 12px 0 0; }
 
-/* Optical material over Radix. RGB lens source and license: components/GLASS-SOURCE.json. */
+/* rdev/liquid-glass-react material, kept behind Radix content. See GLASS-SOURCE.json. */
 .glass-dialog-overlay {
   background: rgb(242 246 250 / 0.04);
-  -webkit-backdrop-filter: blur(2px);
-  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(1px);
+  backdrop-filter: blur(1px);
 }
 .glass-dialog {
   isolation: isolate;
@@ -288,16 +289,18 @@ h1 { margin: 0; font-size: 24px; line-height: 1.4; font-weight: 600; letter-spac
   border-radius: 28px;
   padding: 30px;
   gap: 26px;
-  border-color: rgb(255 255 255 / 0.7);
-  background: linear-gradient(150deg, rgb(255 255 255 / 0.48), rgb(255 255 255 / 0.04) 48%, rgb(255 255 255 / 0.2)), rgb(249 251 255 / 0.7);
-  -webkit-backdrop-filter: blur(18px) saturate(1.25);
-  backdrop-filter: blur(18px) saturate(1.25);
-  box-shadow: 0 32px 100px rgb(28 36 50 / 0.14), 0 8px 28px rgb(28 36 50 / 0.08), 0 0 0 0.5px rgb(22 28 40 / 0.06), 0 1px 1px rgb(255 255 255 / 0.95) inset, 0 -1px 1px rgb(255 255 255 / 0.4) inset;
+  border-color: rgb(255 255 255 / 0.68);
+  background: transparent;
+  box-shadow: 0 24px 72px rgb(28 36 50 / 0.13), 0 6px 20px rgb(28 36 50 / 0.06), 0 0 0 0.5px rgb(22 28 40 / 0.06);
 }
-.glass-dialog[data-glass-mode="lens"] { backdrop-filter: var(--glass-lens) blur(9px) saturate(1.15); }
+.glass-dialog > .glass-warp, .glass-dialog > .glass-tint { position: absolute; inset: 0; z-index: 0; border-radius: inherit; pointer-events: none; }
+.glass-warp { -webkit-backdrop-filter: blur(18px) saturate(1.25); backdrop-filter: blur(18px) saturate(1.25); }
+.glass-dialog[data-glass-mode="lens"] > .glass-warp { filter: var(--glass-lens); -webkit-backdrop-filter: blur(4px) saturate(1.3); backdrop-filter: blur(4px) saturate(1.3); }
+.glass-tint { background: linear-gradient(150deg, rgb(255 255 255 / 0.65), rgb(255 255 255 / 0.28) 48%, rgb(255 255 255 / 0.4)), rgb(249 251 255 / 0.62); }
 .glass-dialog::before {
   content: ""; position: absolute; inset: 0; padding: 1.5px; border-radius: inherit; pointer-events: none;
-  background: linear-gradient(145deg, rgb(255 255 255 / 0.95), rgb(255 255 255 / 0.1) 35%, rgb(255 255 255 / 0.15) 60%, rgb(255 255 255 / 0.8));
+  z-index: 2;
+  background: linear-gradient(var(--glass-light-angle, 124deg), rgb(255 255 255 / 0.95), rgb(255 255 255 / 0.08) 35%, rgb(255 255 255 / 0.12) 60%, rgb(255 255 255 / 0.8));
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
@@ -305,7 +308,8 @@ h1 { margin: 0; font-size: 24px; line-height: 1.4; font-weight: 600; letter-spac
 }
 .glass-dialog::after {
   content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-  background: radial-gradient(ellipse at var(--glass-light-x, 25%) var(--glass-light-y, 0%), rgb(255 255 255 / 0.23), transparent 60%);
+  z-index: 0;
+  background: radial-gradient(ellipse at var(--glass-light-x, 25%) var(--glass-light-y, 0%), rgb(255 255 255 / 0.18), transparent 60%);
 }
 .glass-dialog > * { position: relative; z-index: 1; }
 .glass-dialog > .glass-filter-defs { position: absolute; width: 0; height: 0; pointer-events: none; }
@@ -317,21 +321,21 @@ h1 { margin: 0; font-size: 24px; line-height: 1.4; font-weight: 600; letter-spac
 :root[data-appearance="dark"] .glass-dialog-overlay { background: rgb(231 239 255 / 0.025); }
 :root[data-appearance="dark"] .glass-dialog {
   border-color: rgb(255 255 255 / 0.2);
-  background: linear-gradient(150deg, rgb(255 255 255 / 0.12), rgb(255 255 255 / 0.01) 48%, rgb(255 255 255 / 0.045)), rgb(24 27 33 / 0.78);
   box-shadow: 0 32px 100px rgb(0 0 0 / 0.34), 0 8px 28px rgb(0 0 0 / 0.18), 0 1px 1px rgb(255 255 255 / 0.28) inset, 0 -1px 1px rgb(255 255 255 / 0.06) inset;
 }
+:root[data-appearance="dark"] .glass-tint { background: linear-gradient(150deg, rgb(255 255 255 / 0.09), rgb(255 255 255 / 0.015) 48%, rgb(255 255 255 / 0.04)), rgb(20 23 29 / 0.82); }
 :root[data-appearance="dark"] .glass-dialog::before { opacity: 0.5; }
 :root[data-appearance="dark"] .glass-dialog::after { opacity: 0.28; }
 :root[data-appearance="dark"] .glass-dialog .glass-description { color: #d5d7dc; }
 :root[data-appearance="dark"] .glass-dialog button[data-glass-cancel] { border-color: rgb(255 255 255 / 0.16); background: rgb(255 255 255 / 0.045); box-shadow: 0 1px 0 rgb(255 255 255 / 0.08) inset; }
 :root[data-appearance="dark"] .glass-dialog button[data-glass-cancel]:hover { background: rgb(255 255 255 / 0.09); }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .glass-dialog, :root[data-appearance="dark"] .glass-dialog { background: hsl(var(--card)); }
+  .glass-dialog > .glass-tint, :root[data-appearance="dark"] .glass-dialog > .glass-tint { background: hsl(var(--card)); }
 }
 @media (forced-colors: active) {
-  .glass-dialog, .glass-dialog[data-glass-mode="lens"], :root[data-appearance="dark"] .glass-dialog { background: Canvas; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .glass-dialog, :root[data-appearance="dark"] .glass-dialog { background: Canvas; border-color: CanvasText; }
+  .glass-dialog > .glass-warp, .glass-dialog > .glass-tint, .glass-dialog::before, .glass-dialog::after { display: none; }
   .glass-dialog .glass-description { color: CanvasText; }
-  .glass-dialog::after { display: none; }
   .glass-dialog-overlay { -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
 .spin { animation: keyshift-spin 1.2s linear infinite; }

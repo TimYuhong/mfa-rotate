@@ -8,6 +8,7 @@ import secrets
 import signal
 import sys
 import time
+from collections import Counter
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -15,8 +16,9 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from .models import Credentials, EventPoll, Login, MESSAGES, Receipt, ProxyPoolInput
+from .models import Credentials, EventPoll, Login, MESSAGES, Receipt, ProxyPoolInput, SlotRequest
 from .core import retry_kind
+from .admission import AdmissionQueue
 from .proxy_pool import ProxyError, ProxyPools, parse_proxy
 from .proxy_test import failed as proxy_test_failed, safe_result as proxy_test_result
 
@@ -29,6 +31,7 @@ ACCESS = os.getenv("MFA_ACCESS_KEY", "")
 TTL = 900
 COOKIE = "mfa_session"
 MAX_CONCURRENT = max(1, min(10, int(os.getenv("MFA_MAX_CONCURRENT", "10"))))
+GLOBAL_MAX_CONCURRENT = max(1, min(30, int(os.getenv("MFA_GLOBAL_MAX_CONCURRENT", "30"))))
 
 
 @dataclass
@@ -78,6 +81,7 @@ class Memory:
         self.key = secrets.token_bytes(32)
         self.proxies = ProxyPools(self.key)
         self.proxy_tests = {}
+        self.admission = AdmissionQueue()
         self.stopping = False
 
     def cleanup(self):
@@ -91,6 +95,7 @@ class Memory:
             if now - session["created"] > 7200 and sid not in live_owners:
                 del self.sessions[sid]
         self.proxies.prune(set(self.sessions))
+        self.admission.cleanup(set(self.sessions))
         self.limits = {k: v for k, v in self.limits.items() if now - v[0] < 60}
         self.completed_operations = {k: v for k, v in self.completed_operations.items() if now - v < 7200}
 
@@ -203,6 +208,8 @@ async def lifespan(app):
             with suppress(ProcessLookupError): process.kill()
             await process.wait()
     memory.proxy_tests.clear()
+    memory.admission.waiting.clear()
+    memory.admission.leases.clear()
     await memory.proxies.close()
     memory.jobs.clear()
     memory.sessions.clear()
@@ -299,10 +306,38 @@ async def capabilities():
     active_count = sum(occupied(j) for j in memory.jobs.values())
     return {"enabled": MODE in {"live", "demo"} and (SECURE or LOCAL) and bool(ACCESS),
             "mode": MODE, "secure_required": True, "max_batch": 50,
-            "max_concurrent": MAX_CONCURRENT, "active_count": active_count,
-            "available": active_count < MAX_CONCURRENT,
+            "max_concurrent": min(MAX_CONCURRENT, GLOBAL_MAX_CONCURRENT), "active_count": active_count,
+            "global_max_concurrent": GLOBAL_MAX_CONCURRENT,
+            "reserved_count": len(memory.admission.leases), "waiting_sessions": len(memory.admission.waiting),
+            "max_waiting_sessions": memory.admission.maximum_waiters,
+            "available": active_count + len(memory.admission.leases) < GLOBAL_MAX_CONCURRENT,
             "persistence": "memory-only",
             "routing": {"allow_direct": LOCAL, "default_mode": "direct" if LOCAL else "pool", "max_proxies": 50}}
+
+
+def request_slot(sid):
+    active = Counter(job.owner for job in memory.jobs.values() if occupied(job))
+    try:
+        return memory.admission.request(sid, active, GLOBAL_MAX_CONCURRENT, MAX_CONCURRENT)
+    except OverflowError:
+        raise HTTPException(429, "admission_queue_full") from None
+
+
+@app.post("/api/job-slots")
+async def job_slot(body: SlotRequest, request: Request):
+    sid = owner(request, True)
+    # This endpoint accepts no task data; the only retained queue entry is the session ID and expiry.
+    if memory.stopping:
+        raise HTTPException(409, "busy")
+    memory.throttle(("admission", sid), 120)
+    return request_slot(sid)
+
+
+@app.delete("/api/job-slots/{token}")
+async def release_slot(token: str, request: Request):
+    sid = owner(request, True)
+    memory.admission.release(token, sid)
+    return {"ok": True}
 
 
 def require_pool_idle(sid):
@@ -420,14 +455,29 @@ def create_job_locked(body, sid):
         raise HTTPException(409, "operation_already_completed")
     for job in memory.jobs.values():
         if job.owner == sid and job.operation == body.operation_id:
+            memory.admission.release(body.slot_token, sid)
             return {"id": job.id, "duplicate": True}
     if body.action == "verify" and not body.factor_id:
         raise HTTPException(422, "invalid_input")
     key = hmac.new(memory.key, body.email.casefold().encode(), hashlib.sha256).hexdigest()
     if any(occupied(job) and job.key == key for job in memory.jobs.values()):
         raise HTTPException(409, "account_busy")
-    if memory.stopping or sum(occupied(j) for j in memory.jobs.values()) >= MAX_CONCURRENT or len(memory.jobs) >= 200:
+    active = [job for job in memory.jobs.values() if occupied(job)]
+    # This admission/reservation path has no await, so all sessions share an atomic
+    # limit in the single API event loop. Keep exactly one uvicorn worker.
+    if (memory.stopping or len(active) >= GLOBAL_MAX_CONCURRENT
+            or sum(job.owner == sid for job in active) >= MAX_CONCURRENT or len(memory.jobs) >= 200):
         raise HTTPException(409, "busy")
+    token = body.slot_token
+    if not token:
+        # Older/direct API clients join the same fair queue, never bypass it.
+        memory.throttle(("admission", sid), 120)
+        admission = request_slot(sid)
+        if admission["status"] != "ready":
+            raise HTTPException(409, "busy")
+        token = admission["token"]
+    if not memory.admission.consume(token, sid):
+        raise HTTPException(409, "slot_expired")
     memory.throttle(("jobs", sid), 100)
     job = Job(secrets.token_urlsafe(24), sid, body.operation_id, key)
     network_mode = body.network_mode or ("direct" if LOCAL else "pool")

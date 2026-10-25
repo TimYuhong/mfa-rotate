@@ -1,14 +1,15 @@
 {
   "verified_at": "2026-10-25",
-  "description": "SHA-256 baseline compared with the running deployment before the first public commit. Built frontend artifacts are reproducible outputs and are not tracked.",
+  "description": "SHA-256 source and build baseline compared with the running deployment for the global admission queue release. Built frontend artifacts are not tracked.",
   "files": {
     "app/adapter.py": "1a0bdf33c9b5a509316691f2653451c8a5c8c7e153e9b35c78b613b1b5898c2b",
+    "app/admission.py": "68a5c75c421ceefe029431db1342831c1886bd1193987e9bb0b358df23aa51fa",
     "app/core.py": "0f92c203aa9aec561a94f1d5a9f453783c1c67d5a21b09c52b9d172241366e1b",
-    "app/models.py": "02d6ac46544e1ec82e2252b5cd3ae50851454dfde43c672623fb7eba302cfb32",
+    "app/models.py": "5094c6cb7cdb85c92139602e0c5e01e2457d7204dab9f1e41e6cf964f249765e",
     "app/proxy_pool.py": "8c326df31f40e09ba66a0631cc4774b0509085e78320bf56338c4a6f18960410",
     "app/proxy_test.py": "f3de852634ef9c4ec171140bcb5188e6ad58acb00ec70116296bd6678794808a",
     "app/proxy_transport.py": "cace93ae96090a63d606ea69186ca65b9d9d1dd4bda833e87dba18df467408b2",
-    "app/server.py": "a3a0f8f353078cb78a5c16bf7267b27ffcadb217de5185d6177e5d983cf71ed6",
+    "app/server.py": "b14d86029ae86712320d56684495e9071d0d4df30fe68a1dff5801fab522d1a8",
     "app/worker.py": "22347f9989ee21181c998c9d168d9e9f4971f6be7880933a2349906d6555c4a6",
     "app/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
     "vendor/auth_flow.py": "1ded60c6df762bc3742d86186799cd26f758268dd95cbe51cc6c005f40c15827",
@@ -23,8 +24,15 @@
     "vendor/session_cookie.py": "086014b2fab51fadb6cf3fa27c11e936b57fa4640d30c9bb9cb69fd090767c9a",
     "vendor/SOURCE.json": "eae6e9e87758c7a54b1b06b4d831caf76f7b40e88a332282d4f32262b0e0d065",
     "vendor/mail_providers/__init__.py": "4493c271400cf55ae10da35bdb2286236007ef20f0c2166a5e9816e67f27daf6",
-    "frontend/dist/index.html": "30d919e705d653d0c9aa108eaba6e522b950ccf9a4b9339b471ca5c320065d55",
     "frontend/dist/favicon.ico": "4517ace821d24ae163749ba84fc42f441efdd9d991aa29183110071d455df405",
-    "frontend/dist/assets/keyshift.png": "ec75723f399c476fb2a165ad9187291af85b439ca97fe64ab9f51c5fbf9d41e7"
+    "frontend/dist/index.html": "d7ad65b5ce9975abf1b9ca77188938654d7dc5fdeba7767c15f44dd91b98b278",
+    "frontend/dist/assets/appearance-init.js": "a1d9a02c8b8d6a736f9ccdb2be9b1ad6fbabc59752653ec6ff1c40efa506b74b",
+    "frontend/dist/assets/index-Doz3y4Tb.css": "cbca7c0e9e08e05cc0c0566c8fb6ecebf29ed531366eac5f1fdf74defb44f9c6",
+    "frontend/dist/assets/index-iWJrbDbL.js": "bf41e3a4d01ade99a202a2d9086cb483683dace8a3ed3935cf987dbd103eeae9",
+    "frontend/dist/assets/keyshift.png": "ec75723f399c476fb2a165ad9187291af85b439ca97fe64ab9f51c5fbf9d41e7",
+    "frontend/dist/assets/keyshift.svg": "82c25664dbc0d453ce7cdd52e93604a361cc1b9ce2cbfab07f64c0b98216e6c8",
+    "frontend/dist/assets/liquid-glass-displacement.jpg": "6945d824fd543cb4bb080cf5a58460f29b17a661719ca10ccc718d953bfd7af6",
+    "frontend/dist/assets/licenses/liquid-glass-react.txt": "a413593d2f8f140d2de05376c8928fc5b32ac3e487aee8797841379fc8fed6b1",
+    "frontend/dist/assets/licenses/react-bits.txt": "4bdd1fa59a6b7d5954bc3b213dbc34e455c635a94bbcecf9293553797d0fad02"
   }
 }

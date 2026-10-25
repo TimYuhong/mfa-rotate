@@ -17,6 +17,7 @@ class Credentials(BaseModel):
     initial_state: Literal["activation_unknown", "enabled_unverified"] = "activation_unknown"
     network_mode: Literal["direct", "pool"] | None = None
     proxy_pool_version: str = Field(default="", max_length=80)
+    slot_token: str = Field(default="", max_length=80)
 
     @field_validator("email")
     @classmethod
@@ -46,6 +47,10 @@ class Login(BaseModel):
     access_key: SecretStr = Field(max_length=256)
 
 
+class SlotRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
 class ProxyPoolInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     proxies: list[SecretStr] = Field(min_length=1, max_length=50)
@@ -69,6 +74,8 @@ class EventPoll(BaseModel):
 
 
 MESSAGES = {
+    "admission_queue_full": "当前等待会话已达上限，请稍后再试。",
+    "slot_expired": "执行名额已过期，请重新排队。",
     "proxy_invalid": "代理格式不正确，请检查对应行。",
     "proxy_address_blocked": "代理地址不允许，请使用公网代理。",
     "proxy_required": "请先填写代理池。",

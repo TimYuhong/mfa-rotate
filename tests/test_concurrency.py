@@ -1,4 +1,8 @@
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
+import os
+import subprocess
+import sys
 import time
 
 import pytest
@@ -16,6 +20,7 @@ def client(monkeypatch):
     monkeypatch.setattr(server, "LOCAL", True)
     monkeypatch.setattr(server, "ACCESS", "fixture-access")
     monkeypatch.setattr(server, "MAX_CONCURRENT", 10)
+    monkeypatch.setattr(server, "GLOBAL_MAX_CONCURRENT", 30)
     with TestClient(server.app, base_url=server.ORIGIN) as client:
         response = client.post("/api/session", json={"access_key": "fixture-access"}, headers={"origin": server.ORIGIN})
         client.headers.update({"origin": server.ORIGIN, "x-csrf-token": response.json()["csrf"]})
@@ -44,7 +49,9 @@ def test_ten_slots_and_eleventh_rejected(client, monkeypatch):
     assert len(set(ids)) == 10
     assert client.post("/api/jobs", json=body(10)).json()["code"] == "busy"
     assert client.get("/api/capabilities").json()["max_concurrent"] == 10
-    assert not client.get("/api/capabilities").json()["available"]
+    caps = client.get("/api/capabilities").json()
+    assert caps["global_max_concurrent"] == 30 and caps["active_count"] == 10
+    assert caps["available"]  # Other sessions can still use the global capacity.
 
 
 def test_same_account_mutex_and_idempotency(client, monkeypatch):
@@ -108,11 +115,110 @@ def test_cancel_after_terminal_event_does_not_rewrite_result(client):
 
 def test_global_capacity_applies_across_sessions(client, monkeypatch):
     monkeypatch.setattr(server, "execute", reserve_only)
-    for index in range(10):
-        assert client.post("/api/jobs", json=body(index)).status_code == 200
+    ids = []
+    for session in range(3):
+        if session:
+            response = client.post("/api/session", json={"access_key": "fixture-access"})
+            client.headers["x-csrf-token"] = response.json()["csrf"]
+        for index in range(10):
+            response = client.post("/api/jobs", json=body(session * 10 + index))
+            assert response.status_code == 200
+            ids.append(response.json()["id"])
+        assert client.post("/api/jobs", json=body(100 + session)).json()["code"] == "busy"
     response = client.post("/api/session", json={"access_key": "fixture-access"})
     client.headers["x-csrf-token"] = response.json()["csrf"]
-    assert client.post("/api/jobs", json=body(11)).json()["code"] == "busy"
+    assert client.post("/api/jobs", json=body(31)).json()["code"] == "busy"
+    caps = client.get("/api/capabilities").json()
+    assert caps["active_count"] == caps["global_max_concurrent"] == 30 and not caps["available"]
+    server.memory.jobs[ids[0]].emit({"type": "done", "state": "verified", "code": "verified"})
+    assert client.get("/api/capabilities").json()["active_count"] == 29
+    assert client.post("/api/jobs", json=body(31)).status_code == 200
+    assert client.get("/api/capabilities").json()["active_count"] == 30
+
+
+def test_concurrent_admissions_across_sessions_cannot_exceed_global_limit(client, monkeypatch):
+    monkeypatch.setattr(server, "execute", reserve_only)
+    sessions = [(client.cookies.get(server.COOKIE), client.headers["x-csrf-token"])]
+    for _ in range(3):
+        response = client.post("/api/session", json={"access_key": "fixture-access"})
+        sessions.append((client.cookies.get(server.COOKIE), response.json()["csrf"]))
+    def submit(index):
+        sid, csrf = sessions[index % len(sessions)]
+        return client.post("/api/jobs", json=body(index), headers={"cookie": f"{server.COOKIE}={sid}", "x-csrf-token": csrf})
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        responses = list(pool.map(submit, range(40)))
+    assert sum(response.status_code == 200 for response in responses) == 30
+    assert sum(response.status_code == 409 and response.json()["code"] == "busy" for response in responses) == 10
+    assert sum(server.occupied(job) for job in server.memory.jobs.values()) == 30
+    assert all(sum(job.owner == sid for job in server.memory.jobs.values()) <= 10 for sid, _ in sessions)
+
+
+def test_terminal_event_does_not_release_global_slot_before_cleanup(client, monkeypatch):
+    monkeypatch.setattr(server, "GLOBAL_MAX_CONCURRENT", 1)
+    release = client.portal.call(asyncio.Event)
+    async def hold(job, credentials):
+        try:
+            await release.wait()
+        finally:
+            credentials.clear()
+    monkeypatch.setattr(server, "execute", hold)
+    try:
+        response = client.post("/api/jobs", json=body())
+        job = server.memory.jobs[response.json()["id"]]
+        job.emit({"type": "done", "state": "verified", "code": "verified"})
+        assert client.get("/api/capabilities").json()["active_count"] == 1
+        assert client.post("/api/jobs", json=body(1)).json()["code"] == "busy"
+    finally:
+        client.portal.call(release.set)
+        client.portal.call(asyncio.sleep, 0)
+    assert job.task.done()
+    assert client.get("/api/capabilities").json()["active_count"] == 0
+    assert client.post("/api/jobs", json=body(1)).status_code == 200
+
+
+def test_slot_api_rejects_account_data_and_binds_lease_to_session(client, monkeypatch):
+    monkeypatch.setattr(server, "execute", reserve_only)
+    response = client.post("/api/job-slots", json={"password": "PRIVATE_CANARY"})
+    assert response.status_code == 422 and "PRIVATE_CANARY" not in response.text
+    assert not server.memory.admission.waiting and not server.memory.jobs
+    lease = client.post("/api/job-slots", json={}).json()
+    assert lease["status"] == "ready" and len(server.memory.admission.leases) == 1
+    assert client.post("/api/job-slots", json={}).json()["token"] == lease["token"]
+    original_cookie = client.cookies.get(server.COOKIE)
+    original_csrf = client.headers["x-csrf-token"]
+    login = client.post("/api/session", json={"access_key": "fixture-access"})
+    client.headers["x-csrf-token"] = login.json()["csrf"]
+    assert client.post("/api/jobs", json=body(slot_token=lease["token"])).json()["code"] == "slot_expired"
+    assert not server.memory.jobs
+    client.request("DELETE", f"/api/job-slots/{lease['token']}", json={})
+    assert len(server.memory.admission.leases) == 1
+    client.headers.update({"cookie": f"{server.COOKIE}={original_cookie}", "x-csrf-token": original_csrf})
+    assert client.post("/api/jobs", json=body(slot_token=lease["token"])).status_code == 200
+    assert not server.memory.admission.leases
+
+
+def test_slot_api_counts_reservations_and_legacy_clients_cannot_jump_queue(client, monkeypatch):
+    monkeypatch.setattr(server, "GLOBAL_MAX_CONCURRENT", 1)
+    monkeypatch.setattr(server, "execute", reserve_only)
+    lease = client.post("/api/job-slots", json={}).json()
+    first_sid = client.cookies.get(server.COOKIE)
+    login = client.post("/api/session", json={"access_key": "fixture-access"})
+    client.headers["x-csrf-token"] = login.json()["csrf"]
+    assert client.post("/api/job-slots", json={}).json()["status"] == "queued"
+    assert client.post("/api/jobs", json=body(1)).json()["code"] == "busy"
+    assert client.get("/api/capabilities").json()["reserved_count"] == 1
+    assert client.get("/api/capabilities").json()["active_count"] == 0
+    assert not client.get("/api/capabilities").json()["available"]
+    server.memory.admission.release(lease["token"], first_sid)
+    assert client.post("/api/jobs", json=body(1)).status_code == 200
+    assert client.get("/api/capabilities").json()["active_count"] == 1
+
+
+@pytest.mark.parametrize(("setting", "expected"), [("100", 30), ("0", 1), ("7", 7)])
+def test_configured_global_limit_is_clamped_to_hard_maximum(setting, expected):
+    result = subprocess.run([sys.executable, "-B", "-c", "from app.server import GLOBAL_MAX_CONCURRENT; print(GLOBAL_MAX_CONCURRENT)"],
+                            cwd=server.ROOT, env={**os.environ, "MFA_GLOBAL_MAX_CONCURRENT": setting}, capture_output=True, text=True, check=True)
+    assert result.stdout.strip() == str(expected)
 
 
 def test_ten_real_demo_processes_complete_with_one_poll_channel(client, monkeypatch):

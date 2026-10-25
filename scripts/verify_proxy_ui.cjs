@@ -14,6 +14,8 @@ async function mock(context, local = true) {
     if (path === '/api/capabilities') return route.fulfill({ json: { enabled: true, mode: 'live', available: true, max_concurrent: 10, max_batch: 50,
       routing: { allow_direct: local, default_mode: local ? 'direct' : 'pool', max_proxies: 50 } } });
     if (path === '/api/session') return route.fulfill({ json: { csrf: 'test-csrf' } });
+    if (path === '/api/job-slots') return route.fulfill({ json: { status: 'ready', token: 'fixture-slot' } });
+    if (path.startsWith('/api/job-slots/')) return route.fulfill({ json: { ok: true } });
     if (path === '/api/proxy-pool/test') {
       testCalls++;
       assert.equal(method, 'POST');

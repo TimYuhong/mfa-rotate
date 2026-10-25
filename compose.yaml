@@ -12,6 +12,7 @@ services:
       MFA_ORIGIN: ${MFA_ORIGIN:-http://127.0.0.1:8790}
       MFA_ACCESS_KEY: ${MFA_ACCESS_KEY:-}
       MFA_MAX_CONCURRENT: ${MFA_MAX_CONCURRENT:-10}
+      MFA_GLOBAL_MAX_CONCURRENT: ${MFA_GLOBAL_MAX_CONCURRENT:-30}
     read_only: true
     tmpfs:
       - /tmp:size=128m,mode=1777,noexec,nosuid,nodev

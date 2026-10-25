@@ -44,9 +44,10 @@ import { parseLines, parseSingle, type Credential } from "./parser";
 import { credentialText } from "./export";
 import { readCredentialFile } from "./import-file";
 import { api, ApiError, consume, setCsrf } from "./api";
+import { AdmissionError, JobAdmission } from "./job-admission";
 import * as vault from "./vault";
 import { applyAppearance, readAppearance, type Appearance } from "./appearance";
-import { failurePhase, retryAction, taskCategory, type Outcome, type TaskFilter } from "./task-state";
+import { countTasks, failurePhase, retryAction, taskCategory, type Outcome, type TaskFilter } from "./task-state";
 import { TaskQueue } from "./task-queue";
 import { taskProgress } from "./task-progress";
 import { TaskProgress } from "./components/task-progress";
@@ -57,6 +58,11 @@ import { ProxyPoolCard } from "./components/proxy-pool";
 import { useProxyPool, type NetworkRoute } from "./use-proxy-pool";
 import { BackgroundDecor, SnowControl, useLightSnow } from "./components/background-decor";
 import "./style.css";
+
+const admission = new JobAdmission(
+  () => api("/job-slots", "POST", {}),
+  token => api(`/job-slots/${token}`, "DELETE"),
+);
 
 const stageName: Record<string, string> = {
   queued: "队列中",
@@ -423,16 +429,17 @@ function App() {
         }
         control.submitting = true;
         try {
-          const data = await api(control.retryOf ? `/jobs/${control.retryOf}/retry` : "/jobs", "POST", {
+          const data = await admission.submit(token => api(control.retryOf ? `/jobs/${control.retryOf}/retry` : "/jobs", "POST", {
             ...control.network,
             ...control.credentials, operation_id: control.operation, storage_ready: true, authorized: true,
             action: control.action, factor_id: control.result?.factor_id ?? "",
             initial_state: control.state === "enabled_unverified" ? "enabled_unverified" : "activation_unknown",
-          });
+            slot_token: token,
+          }), () => control.cancelled, () => patch(control.id, { stage: "queued", message: "等待执行名额…" }));
           control.job = data.id;
           break;
         } catch (error) {
-          if (error instanceof ApiError && error.code === "busy") {
+          if (error instanceof ApiError && ["busy", "slot_expired"].includes(error.code)) {
             control.submitting = false;
             patch(control.id, { message: "等待执行名额…" });
             await new Promise(resolve => setTimeout(resolve, 1000));
@@ -453,8 +460,15 @@ function App() {
       if (control.cancelled) await api(`/jobs/${control.job}/cancel`, "POST").catch(() => {});
       await watch(control);
     } catch (error) {
+      if (error instanceof AdmissionError && error.code === "cancelled_before_submit") {
+        control.outcome = "cancelled";
+        clearCredential(control);
+        patch(control.id, { outcome: "cancelled", stage: "stopped", cancelPending: false, message: error.message });
+        return;
+      }
       const certainRejection = !control.job && error instanceof ApiError &&
-        ["queue_timeout", "disabled", "invalid_input", "account_busy", "rate_limited", "unsafe_retry", "job_not_found", "access_denied", "session_expired", "csrf_rejected", "proxy_required", "proxy_pool_changed", "direct_forbidden"].includes(error.code);
+        ["queue_timeout", "admission_queue_full", "disabled", "invalid_input", "account_busy", "rate_limited", "unsafe_retry", "job_not_found", "access_denied", "session_expired", "csrf_rejected", "proxy_required", "proxy_pool_changed", "direct_forbidden"].includes(error.code)
+        || (!control.job && error instanceof AdmissionError);
       control.outcome = "failed";
       patch(control.id, { outcome: "failed", stage: "stopped", uncertain: !certainRejection,
         state: control.state, message: (error as Error).message, cancelPending: false });
@@ -619,9 +633,8 @@ function App() {
     } catch (error) { setError((error as Error).message); }
     finally { clearingResults.current = false; setClearingSaved(false); }
   }
-  const success = rows.filter(row => row.outcome === "success").length;
-  const failures = rows.filter(row => row.outcome === "failed").length;
-  const cancelledCount = rows.filter(row => row.outcome === "cancelled").length;
+  const counts = countTasks(rows);
+  const success = counts.success, failures = counts.failed, cancelledCount = counts.cancelled;
   const retryableFailures = rows.filter(canQueueRetry).length;
   const displayRows = rows.filter(row => filter === "all" || taskCategory(row) === filter);
   const taskPage = useListPage(displayRows);
@@ -878,9 +891,11 @@ function App() {
                       size="sm"
                       className={filter === v ? "selected" : ""}
                       aria-pressed={filter === v}
+                      aria-label={`${l}，${counts[v]} 个任务`}
+                      data-task-filter={v}
                       onClick={() => { setFilter(v); taskPage.setPage(1); }}
                     >
-                      {l}
+                      <span className="filter-label">{l}<span className="filter-count" aria-hidden="true">{counts[v]}</span></span>
                     </Button>
                   ))}
                 </div>

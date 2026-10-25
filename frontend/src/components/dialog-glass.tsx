@@ -1,47 +1,50 @@
-// SVG-only adaptation of React Bits GlassSurface, commit e12c22192ac7b4b452c5e2feb9b586d74765d696.
-// Copyright (c) 2026 David Haz. MIT + Commons Clause; see GLASS-SOURCE.json and public/assets/licenses/react-bits.txt.
+// Adapted from rdev/liquid-glass-react, commit ac48eab18d1f7f444ae30002d240cae29c863a21.
+// Copyright 2025 MAX ROVENSKY. MIT; see GLASS-SOURCE.json and assets/licenses/liquid-glass-react.txt.
 import { useEffect, useId, useRef } from "react";
 
-/** Visual material only. Radix retains focus, keyboard, dismissal and confirmation semantics. */
+const displacementMap = "/assets/liquid-glass-displacement.jpg";
+const displacementScale = 38;
+const aberrationIntensity = 0.65;
+
+/** Background material only: Radix owns layout, focus, keyboard and confirmation. */
 export function DialogGlass() {
   const id = `dialog-lens-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const definitions = useRef<SVGSVGElement>(null);
-  const map = useRef<SVGFEImageElement>(null);
 
   useEffect(() => {
     const panel = definitions.current?.closest<HTMLElement>(".glass-dialog");
     if (!panel) return;
-    const supported = !/Firefox|Version\/.*Safari/.test(navigator.userAgent) && CSS.supports("backdrop-filter", `url(#${id})`);
-    if (!supported) return;
-    panel.style.setProperty("--glass-lens", `url("#${id}")`);
-    panel.dataset.glassMode = "lens";
-    let lastSize = "";
-    const update = () => {
+    panel.dataset.glassSource = "rdev/liquid-glass-react";
+    const supported = !/Firefox|Version\/.*Safari/.test(navigator.userAgent)
+      && CSS.supports("backdrop-filter", "blur(1px)") && CSS.supports("filter", `url(#${id})`);
+    let active = true;
+    const image = new Image();
+    const measure = () => {
+      // Layout dimensions stay stable while Radix animates its transform.
       const width = panel.offsetWidth, height = panel.offsetHeight;
-      const signature = `${width}x${height}`;
-      if (!width || !height || signature === lastSize) return;
-      lastSize = signature;
-      const radius = 28, edge = Math.min(width, height) * 0.065;
-      // Upstream's neutral-center RG displacement map bends the perimeter, not the content.
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-        <defs>
-          <linearGradient id="x" x1="100%" x2="0%"><stop stop-color="#0000"/><stop offset="1" stop-color="red"/></linearGradient>
-          <linearGradient id="y" x2="0%" y2="100%"><stop stop-color="#0000"/><stop offset="1" stop-color="blue"/></linearGradient>
-          <filter id="soft"><feGaussianBlur stdDeviation="6"/></filter>
-        </defs>
-        <rect width="100%" height="100%" fill="black"/>
-        <rect width="100%" height="100%" rx="${radius}" fill="url(#x)"/>
-        <rect width="100%" height="100%" rx="${radius}" fill="url(#y)" style="mix-blend-mode:difference"/>
-        <rect x="${edge}" y="${edge}" width="${width - edge * 2}" height="${height - edge * 2}" rx="${radius}" fill="#808080" filter="url(#soft)"/>
-      </svg>`;
-      map.current?.setAttribute("href", `data:image/svg+xml,${encodeURIComponent(svg)}`);
+      if (!width || !height) return;
+      panel.style.setProperty("--glass-width", `${width}px`);
+      panel.style.setProperty("--glass-height", `${height}px`);
     };
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(panel);
+    if (supported) {
+      image.onload = () => {
+        if (!active) return;
+        panel.style.setProperty("--glass-lens", `url("#${id}")`);
+        panel.dataset.glassMode = "lens";
+      };
+      image.src = displacementMap;
+    }
+    measure();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    observer?.observe(panel);
+    window.addEventListener("resize", measure);
     return () => {
-      observer.disconnect();
-      panel.style.removeProperty("--glass-lens");
+      active = false;
+      image.onload = null;
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+      for (const name of ["--glass-lens", "--glass-width", "--glass-height"]) panel.style.removeProperty(name);
+      delete panel.dataset.glassSource;
       delete panel.dataset.glassMode;
     };
   }, [id]);
@@ -55,14 +58,17 @@ export function DialogGlass() {
       frame = 0;
       panel.style.setProperty("--glass-light-x", `${x}%`);
       panel.style.setProperty("--glass-light-y", `${y}%`);
+      // Upstream's pointer-directed edge highlight, without moving business controls.
+      panel.style.setProperty("--glass-light-angle", `${135 + (x - 50) * 0.45}deg`);
     };
     const reset = () => {
       cancelAnimationFrame(frame); frame = 0;
       x = 25; y = 0; paint();
     };
     const move = (event: PointerEvent) => {
-      if (motion.matches || event.pointerType !== "mouse") return;
+      if (motion.matches || document.hidden || event.pointerType !== "mouse") return;
       const box = panel.getBoundingClientRect();
+      if (!box.width || !box.height) return;
       x = Math.max(0, Math.min(100, (event.clientX - box.left) / box.width * 100));
       y = Math.max(0, Math.min(100, (event.clientY - box.top) / box.height * 100));
       if (!frame) frame = requestAnimationFrame(paint);
@@ -70,30 +76,45 @@ export function DialogGlass() {
     panel.addEventListener("pointermove", move);
     panel.addEventListener("pointerleave", reset);
     motion.addEventListener("change", reset);
+    document.addEventListener("visibilitychange", reset);
     return () => {
       cancelAnimationFrame(frame);
       panel.removeEventListener("pointermove", move);
       panel.removeEventListener("pointerleave", reset);
       motion.removeEventListener("change", reset);
-      panel.style.removeProperty("--glass-light-x");
-      panel.style.removeProperty("--glass-light-y");
+      document.removeEventListener("visibilitychange", reset);
+      for (const name of ["--glass-light-x", "--glass-light-y", "--glass-light-angle"]) panel.style.removeProperty(name);
     };
   }, []);
 
-  return <svg ref={definitions} className="glass-filter-defs" width="0" height="0" aria-hidden="true" focusable="false">
-    <defs>
-      <filter id={id} colorInterpolationFilters="sRGB" x="0%" y="0%" width="100%" height="100%">
-        <feImage ref={map} width="100%" height="100%" preserveAspectRatio="none" result="map" />
-        <feDisplacementMap in="SourceGraphic" in2="map" scale="-70" xChannelSelector="R" yChannelSelector="G" result="red-shift" />
-        <feColorMatrix in="red-shift" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="red" />
-        <feDisplacementMap in="SourceGraphic" in2="map" scale="-69" xChannelSelector="R" yChannelSelector="G" result="green-shift" />
-        <feColorMatrix in="green-shift" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="green" />
-        <feDisplacementMap in="SourceGraphic" in2="map" scale="-68" xChannelSelector="R" yChannelSelector="G" result="blue-shift" />
-        <feColorMatrix in="blue-shift" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="blue" />
-        <feBlend in="red" in2="green" mode="screen" result="rg" />
-        <feBlend in="rg" in2="blue" mode="screen" />
-        <feGaussianBlur stdDeviation="0.6" />
-      </filter>
-    </defs>
-  </svg>;
+  return <>
+    <svg ref={definitions} className="glass-filter-defs" style={{ width: "var(--glass-width, 0px)", height: "var(--glass-height, 0px)" }} aria-hidden="true" focusable="false">
+      <defs>
+        {/* Upstream GlassFilter: preserve the clean center and refract the edge in RGB. */}
+        <filter id={id} x="-35%" y="-35%" width="170%" height="170%" colorInterpolationFilters="sRGB">
+          <feImage href={displacementMap} x="0" y="0" width="100%" height="100%" result="DISPLACEMENT_MAP" preserveAspectRatio="xMidYMid slice" />
+          <feColorMatrix in="DISPLACEMENT_MAP" type="matrix" values="0.3 0.3 0.3 0 0  0.3 0.3 0.3 0 0  0.3 0.3 0.3 0 0  0 0 0 1 0" result="EDGE_INTENSITY" />
+          <feComponentTransfer in="EDGE_INTENSITY" result="EDGE_MASK">
+            <feFuncA type="discrete" tableValues={`0 ${aberrationIntensity * 0.05} 1`} />
+          </feComponentTransfer>
+          <feOffset in="SourceGraphic" dx="0" dy="0" result="CENTER_ORIGINAL" />
+          <feDisplacementMap in="SourceGraphic" in2="DISPLACEMENT_MAP" scale={-displacementScale} xChannelSelector="R" yChannelSelector="B" result="RED_DISPLACED" />
+          <feColorMatrix in="RED_DISPLACED" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="RED_CHANNEL" />
+          <feDisplacementMap in="SourceGraphic" in2="DISPLACEMENT_MAP" scale={displacementScale * (-1 - aberrationIntensity * 0.05)} xChannelSelector="R" yChannelSelector="B" result="GREEN_DISPLACED" />
+          <feColorMatrix in="GREEN_DISPLACED" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="GREEN_CHANNEL" />
+          <feDisplacementMap in="SourceGraphic" in2="DISPLACEMENT_MAP" scale={displacementScale * (-1 - aberrationIntensity * 0.1)} xChannelSelector="R" yChannelSelector="B" result="BLUE_DISPLACED" />
+          <feColorMatrix in="BLUE_DISPLACED" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="BLUE_CHANNEL" />
+          <feBlend in="GREEN_CHANNEL" in2="BLUE_CHANNEL" mode="screen" result="GB_COMBINED" />
+          <feBlend in="RED_CHANNEL" in2="GB_COMBINED" mode="screen" result="RGB_COMBINED" />
+          <feGaussianBlur in="RGB_COMBINED" stdDeviation={Math.max(0.1, 0.5 - aberrationIntensity * 0.1)} result="ABERRATED_BLURRED" />
+          <feComposite in="ABERRATED_BLURRED" in2="EDGE_MASK" operator="in" result="EDGE_ABERRATION" />
+          <feComponentTransfer in="EDGE_MASK" result="INVERTED_MASK"><feFuncA type="table" tableValues="1 0" /></feComponentTransfer>
+          <feComposite in="CENTER_ORIGINAL" in2="INVERTED_MASK" operator="in" result="CENTER_CLEAN" />
+          <feComposite in="EDGE_ABERRATION" in2="CENTER_CLEAN" operator="over" />
+        </filter>
+      </defs>
+    </svg>
+    <span className="glass-warp" aria-hidden="true" />
+    <span className="glass-tint" aria-hidden="true" />
+  </>;
 }

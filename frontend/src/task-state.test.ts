@@ -1,7 +1,38 @@
 import { describe, expect, it } from "vitest";
-import { retryAction, taskCategory } from "./task-state";
+import { countTasks, retryAction, taskCategory, type Outcome } from "./task-state";
 import { TaskQueue } from "./task-queue";
 import { JobEvents } from "./job-events";
+
+describe("task filter counts", () => {
+  it("shows every category as zero when there are no tasks", () => {
+    expect(countTasks([])).toEqual({ all: 0, running: 0, queued: 0, success: 0, failed: 0, cancelled: 0 });
+  });
+
+  it("counts the complete batch and gives terminal outcomes priority over a queued stage", () => {
+    const rows: { outcome: Outcome; stage: string }[] = [
+      ...Array.from({ length: 15 }, () => ({ outcome: "running" as const, stage: "queued" })),
+      ...Array.from({ length: 10 }, () => ({ outcome: "running" as const, stage: "authenticating" })),
+      ...Array.from({ length: 8 }, () => ({ outcome: "success" as const, stage: "complete" })),
+      ...Array.from({ length: 6 }, () => ({ outcome: "failed" as const, stage: "queued" })),
+      ...Array.from({ length: 3 }, () => ({ outcome: "cancelled" as const, stage: "queued" })),
+    ];
+    expect(countTasks(rows)).toEqual({ all: 42, running: 10, queued: 15, success: 8, failed: 6, cancelled: 3 });
+  });
+
+  it("moves a retried task between buckets without adding an attempt to the total", () => {
+    const task: { outcome: Outcome; stage: string } = { outcome: "failed", stage: "stopped" };
+    const rows = [task];
+    expect(countTasks(rows)).toEqual({ all: 1, running: 0, queued: 0, success: 0, failed: 1, cancelled: 0 });
+    task.outcome = "running"; task.stage = "queued";
+    expect(countTasks(rows)).toEqual({ all: 1, running: 0, queued: 1, success: 0, failed: 0, cancelled: 0 });
+    task.stage = "verifying";
+    expect(countTasks(rows)).toEqual({ all: 1, running: 1, queued: 0, success: 0, failed: 0, cancelled: 0 });
+    task.outcome = "success"; task.stage = "complete";
+    expect(countTasks(rows)).toEqual({ all: 1, running: 0, queued: 0, success: 1, failed: 0, cancelled: 0 });
+    rows.splice(0, 1);
+    expect(countTasks(rows).all).toBe(0);
+  });
+});
 
 describe("task isolation and retries", () => {
   it("only retries full rotation before a confirmed mutation", () => {

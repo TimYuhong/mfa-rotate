@@ -9,7 +9,7 @@ if (-not (Test-Path -LiteralPath $settingsPath) -or -not (Test-Path -LiteralPath
 $settings = @{}
 foreach ($settingsLine in Get-Content -LiteralPath $settingsPath) {
     if ([string]::IsNullOrWhiteSpace($settingsLine) -or $settingsLine.TrimStart().StartsWith('#')) { continue }
-    if ($settingsLine -notmatch '^(MFA_MODE|MFA_LOCAL_DEV|MFA_ORIGIN|MFA_ACCESS_KEY|MFA_MAX_CONCURRENT)=(.*)$') {
+    if ($settingsLine -notmatch '^(MFA_MODE|MFA_LOCAL_DEV|MFA_ORIGIN|MFA_ACCESS_KEY|MFA_MAX_CONCURRENT|MFA_GLOBAL_MAX_CONCURRENT)=(.*)$') {
         throw 'Unsupported local setting.'
     }
     $settings[$Matches[1]] = $Matches[2]
@@ -20,8 +20,10 @@ foreach ($settingsName in @('MFA_MODE','MFA_LOCAL_DEV','MFA_ORIGIN','MFA_ACCESS_
     }
     [Environment]::SetEnvironmentVariable($settingsName, $settings[$settingsName], 'Process')
 }
-if ($settings.ContainsKey('MFA_MAX_CONCURRENT')) {
-    [Environment]::SetEnvironmentVariable('MFA_MAX_CONCURRENT', $settings['MFA_MAX_CONCURRENT'], 'Process')
+foreach ($limitName in @('MFA_MAX_CONCURRENT', 'MFA_GLOBAL_MAX_CONCURRENT')) {
+    if ($settings.ContainsKey($limitName)) {
+        [Environment]::SetEnvironmentVariable($limitName, $settings[$limitName], 'Process')
+    }
 }
 $env:PYTHONDONTWRITEBYTECODE = '1'
 Push-Location -LiteralPath $projectPath

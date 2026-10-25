@@ -6,6 +6,12 @@ export function taskCategory(task: { outcome: Outcome; stage: string }): Exclude
   return task.outcome === "running" ? (task.stage === "queued" ? "queued" : "running") : task.outcome;
 }
 
+export function countTasks(tasks: readonly { outcome: Outcome; stage: string }[]): Record<TaskFilter, number> {
+  const counts: Record<TaskFilter, number> = { all: tasks.length, running: 0, queued: 0, success: 0, failed: 0, cancelled: 0 };
+  for (const task of tasks) counts[taskCategory(task)]++;
+  return counts;
+}
+
 export function retryAction(state: string, uncertain = false): RetryAction {
   if (uncertain) return "check";
   if (state === "unchanged") return "rotate";

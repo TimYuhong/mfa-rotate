@@ -13,6 +13,15 @@ async function main() {
   let release = false, maximum = 0, cancelCalls = 0, loseRetryResponse = true, releaseBulk = false;
   const operationLookups = [];
   const secret = 'KRUGS4ZANFZSAYJAORSXG5BAONSWG4TF';
+  const assertCounts = async expected => {
+    await page.waitForFunction(values => Object.entries(values).every(([category, value]) =>
+      document.querySelector(`[data-task-filter="${category}"] .filter-count`)?.textContent === String(value)), expected);
+    assert.equal(expected.all, Object.entries(expected).filter(([category]) => category !== 'all').reduce((sum, [, value]) => sum + value, 0));
+    const labels = { all: '全部', running: '进行中', queued: '队列中', success: '成功', failed: '失败', cancelled: '取消' };
+    for (const [category, value] of Object.entries(expected)) {
+      assert.equal(await page.locator(`[data-task-filter="${category}"]`).getAttribute('aria-label'), `${labels[category]}，${value} 个任务`);
+    }
+  };
   const emit = (job, event) => {
     job.events.push({ ...event, seq: job.events.length + 1 });
     if (event.type === 'done') job.done = true;
@@ -27,6 +36,8 @@ async function main() {
     if (path === '/api/capabilities') return route.fulfill({ json: { enabled: true, mode: 'live', available: true, max_concurrent: 10, max_batch: 50,
       routing: { allow_direct: true, default_mode: 'direct', max_proxies: 50 } } });
     if (path === '/api/session') return route.fulfill({ json: { csrf: 'test-csrf' } });
+    if (path === '/api/job-slots') return route.fulfill({ json: { status: 'ready', token: 'fixture-slot' } });
+    if (path.startsWith('/api/job-slots/')) return route.fulfill({ json: { ok: true } });
     if ((path === '/api/jobs' || path.endsWith('/retry')) && method === 'POST') {
       const payload = request.postDataJSON();
       if ([...jobs.values()].filter(job => !job.done).length >= 10) return route.fulfill({ status: 409, json: { code: 'busy', message: 'busy' } });
@@ -95,6 +106,7 @@ async function main() {
   });
   try {
     await page.goto(site);
+    await assertCounts({ all: 0, running: 0, queued: 0, success: 0, failed: 0, cancelled: 0 });
     await page.getByRole('tab', { name: '批量导入', exact: true }).click();
     await page.getByLabel('批量账号', { exact: true }).fill(Array.from({ length: 25 }, (_, i) => `fixture-${i}@example.com---fake-password---JBSWY3DPEHPK3PXP`).join('\n'));
     await page.getByRole('checkbox').check();
@@ -108,13 +120,15 @@ async function main() {
     assert(glass.blur.includes('blur'), JSON.stringify(glass));
     await page.waitForFunction(() => document.querySelector('.glass-dialog')?.dataset.glassMode === 'lens');
     const lens = await page.locator('.glass-dialog').evaluate(panel => ({
-      filter: getComputedStyle(panel).backdropFilter,
+      filter: getComputedStyle(panel.querySelector('.glass-warp')).filter,
+      source: panel.dataset.glassSource,
       radius: getComputedStyle(panel).borderRadius,
       displacement: panel.querySelector('feImage')?.getAttribute('href'),
       canvasCount: panel.querySelectorAll('canvas').length,
-      background: getComputedStyle(panel).backgroundImage,
+      background: getComputedStyle(panel.querySelector('.glass-tint')).backgroundImage,
     }));
-    assert(lens.filter.includes('url(') && lens.radius === '28px' && lens.displacement?.startsWith('data:image/svg+xml,'), 'SVG lens is active');
+    assert(lens.filter.includes('url(') && lens.radius === '28px' && lens.displacement === '/assets/liquid-glass-displacement.jpg', 'Pinned upstream SVG lens is active');
+    assert.equal(lens.source, 'rdev/liquid-glass-react');
     assert.equal(lens.canvasCount, 0, 'No WebGL/canvas renderer');
     assert.notEqual(lens.background, 'none', 'Optical material must not be replaced by an opaque OS fallback');
     await page.getByRole('alertdialog').evaluate(panel => Promise.all(panel.getAnimations().map(animation => animation.finished)));
@@ -125,6 +139,16 @@ async function main() {
     await page.waitForFunction(() => document.querySelector('.glass-dialog').style.getPropertyValue('--glass-light-x') === '25%');
     await page.mouse.move(panelBox.x + panelBox.width * 0.9, panelBox.y + panelBox.height * 0.5);
     assert.equal(await page.locator('.glass-dialog').evaluate(panel => panel.style.getPropertyValue('--glass-light-x')), '25%');
+    const refracted = await page.getByRole('alertdialog').screenshot({ animations: 'disabled' });
+    const activeLens = await page.locator('.glass-dialog').evaluate(panel => {
+      const value = panel.style.getPropertyValue('--glass-lens');
+      panel.style.setProperty('--glass-lens', 'none');
+      return value;
+    });
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    const plainBackdrop = await page.getByRole('alertdialog').screenshot({ animations: 'disabled' });
+    assert(!refracted.equals(plainBackdrop), 'The upstream filter must change rendered pixels');
+    await page.locator('.glass-dialog').evaluate((panel, value) => panel.style.setProperty('--glass-lens', value), activeLens);
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await page.screenshot({ path: 'output/playwright/dialog-glass-light.png', animations: 'disabled' });
     await page.getByRole('button', { name: '返回检查', exact: true }).click();
@@ -164,6 +188,20 @@ async function main() {
       }));
       assert(boxes.length > 0);
       assert(boxes.every(box => (box.horizontalGap >= 15 || box.verticalGap >= 8) && box.metaGap >= 7 && box.targetHeight >= 44), JSON.stringify(boxes));
+      const typography = await page.locator('[data-task-filter]').evaluateAll(buttons => buttons.map(button => {
+        const label = button.querySelector('.filter-label'), count = button.querySelector('.filter-count');
+        const markers = [label, count].map(parent => {
+          const marker = document.createElement('i');
+          marker.style.cssText = 'display:inline-block;width:0;height:0;padding:0;border:0;vertical-align:baseline';
+          parent.append(marker); return marker;
+        });
+        const result = { delta: Math.abs(markers[0].getBoundingClientRect().y - markers[1].getBoundingClientRect().y),
+          sameFontSize: getComputedStyle(label).fontSize === getComputedStyle(count).fontSize,
+          sameLineHeight: getComputedStyle(label).lineHeight === getComputedStyle(count).lineHeight };
+        markers.forEach(marker => marker.remove());
+        return result;
+      }));
+      assert(typography.length === 6 && typography.every(item => item.delta < 0.25 && item.sameFontSize && item.sameLineHeight), JSON.stringify(typography));
     };
     await page.waitForFunction(() => document.querySelector('[role="progressbar"][aria-label="fixture-2@example.com 的任务进度"]')?.getAttribute('aria-valuenow') === '10');
     for (const theme of ['纯白', '深色']) {
@@ -182,14 +220,16 @@ async function main() {
     await page.getByRole('button', { name: '纯白', exact: true }).click();
     assert.equal(await page.locator('.result-row').count(), 10);
     assert.equal(await taskPager.locator('.page-number').innerText(), '第 1 / 3 页');
-    await page.locator('.result-filter').getByRole('button', { name: '进行中', exact: true }).click();
+    await assertCounts({ all: 25, running: 10, queued: 15, success: 0, failed: 0, cancelled: 0 });
+    await page.locator('[data-task-filter="running"]').click();
     await page.waitForFunction(() => document.querySelector('.results-card .pagination-total')?.textContent === '共 10 条');
     assert.equal(await page.locator('.result-filter').getByRole('button', { name: '导出成功 TXT', exact: true }).count(), 0);
-    await page.locator('.result-filter').getByRole('button', { name: '队列中', exact: true }).click();
+    await page.locator('[data-task-filter="queued"]').click();
     await page.waitForFunction(() => document.querySelector('.results-card .pagination-total')?.textContent === '共 15 条');
     assert.equal(await taskBar('fixture-11@example.com').getAttribute('aria-valuenow'), '0');
+    await assertCounts({ all: 25, running: 10, queued: 15, success: 0, failed: 0, cancelled: 0 });
     assert.equal(await page.locator('.result-filter').getByRole('button', { name: '导出成功 TXT', exact: true }).count(), 0);
-    await page.locator('.result-filter').getByRole('button', { name: '全部', exact: true }).click();
+    await page.locator('[data-task-filter="all"]').click();
     await taskPager.getByRole('button', { name: '下一页', exact: true }).click();
     await taskBar('fixture-11@example.com').waitFor();
     assert.equal(await taskBar('fixture-11@example.com').getAttribute('aria-valuenow'), '0');
@@ -201,6 +241,7 @@ async function main() {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.locator('.results-card').evaluate(el => el.scrollIntoView({ block: 'start' }));
     await page.screenshot({ path: 'output/playwright/task-progress-running-mobile.png', fullPage: false, animations: 'disabled' });
+    await page.locator('.result-filter > div').screenshot({ path: 'output/playwright/task-counts-mobile.png', animations: 'disabled' });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.getByRole('button', { name: '纯白', exact: true }).click();
@@ -211,16 +252,18 @@ async function main() {
     console.log('STEP: cancelled one queued and one running task');
     release = true;
     await page.getByText('21 成功 · 2 失败 · 2 取消', { exact: true }).waitFor();
+    await assertCounts({ all: 25, running: 0, queued: 0, success: 21, failed: 2, cancelled: 2 });
     assert.equal(await taskBar('fixture-0@example.com').getAttribute('aria-valuenow'), '10');
     assert.equal(await taskBar('fixture-1@example.com').getAttribute('aria-valuenow'), '95');
     assert.equal(await taskBar('fixture-3@example.com').getAttribute('aria-valuenow'), '100');
     await page.locator('.results-card').evaluate(el => el.scrollIntoView({ block: 'start' }));
     await page.screenshot({ path: 'output/playwright/task-progress-mixed-light.png', fullPage: false, animations: 'disabled' });
+    await page.locator('.result-filter > div').screenshot({ path: 'output/playwright/task-counts-light.png', animations: 'disabled' });
     console.log('STEP: batch settled');
     assert.equal(maximum, 10);
     assert.equal(cancelCalls, 1);
     assert.equal(calls.some(call => call.email === 'fixture-11@example.com'), false);
-    await page.locator('.result-filter').getByRole('button', { name: '失败', exact: true }).click();
+    await page.locator('[data-task-filter="failed"]').click();
     await page.waitForFunction(() => document.querySelectorAll('.result-row').length === 2);
     assert.equal(await page.locator('.result-filter').getByRole('button', { name: '重试失败', exact: true }).isEnabled(), true);
     assert.equal(await page.locator('.result-filter').getByRole('button', { name: '导出成功 TXT', exact: true }).count(), 0);
@@ -242,11 +285,11 @@ async function main() {
     assert.equal(calls.filter(call => call.email === 'fixture-0@example.com').length, 2);
     assert.equal(operationLookups.length, 1);
     console.log('STEP: safe retries settled');
-    await page.locator('.result-filter').getByRole('button', { name: '取消', exact: true }).click();
+    await page.locator('[data-task-filter="cancelled"]').click();
     await page.waitForFunction(() => document.querySelectorAll('.result-row').length === 2);
     assert.equal(await page.locator('.result-filter').getByRole('button', { name: '导出成功 TXT', exact: true }).count(), 0);
     assert.equal(await page.locator('.result-filter').getByRole('button', { name: '重试失败', exact: true }).count(), 0);
-    await page.locator('.result-filter').getByRole('button', { name: '成功', exact: true }).click();
+    await page.locator('[data-task-filter="success"]').click();
     await page.waitForFunction(() => document.querySelectorAll('.result-row').length === 10);
     assert.equal((await page.getByRole('progressbar').evaluateAll(bars => bars.every(bar => bar.getAttribute('aria-valuenow') === '100'))), true);
     await page.getByLabel('任务每页条数', { exact: true }).selectOption('20');
@@ -395,7 +438,7 @@ async function main() {
     await page.getByRole('button', { name: '关闭错误提示', exact: true }).click();
     await page.emulateMedia({ reducedMotion: 'reduce' });
     assert.equal(await page.locator('[data-progress-indicator]').first().evaluate(el => parseFloat(getComputedStyle(el).transitionDuration) < 0.01), true);
-    await page.locator('.result-filter').getByRole('button', { name: '全部', exact: true }).click();
+    await page.locator('[data-task-filter="all"]').click();
     await page.screenshot({ path: 'output/playwright/concurrency-desktop.png', fullPage: true });
     await page.setViewportSize({ width: 375, height: 812 });
     await page.screenshot({ path: 'output/playwright/concurrency-mobile.png', fullPage: true });
@@ -408,23 +451,26 @@ async function main() {
     await page.getByRole('button', { name: '确认并开始', exact: true }).click();
     await page.getByRole('alertdialog').waitFor({ state: 'detached' });
     await page.getByText('0 成功 · 3 失败 · 0 取消', { exact: true }).waitFor();
+    await assertCounts({ all: 25, running: 10, queued: 12, success: 0, failed: 3, cancelled: 0 });
     assert.equal(await savedCard.getByRole('button', { name: '清空结果', exact: true }).isDisabled(), true, 'Running tasks protect saved keys');
-    await page.locator('.result-filter').getByRole('button', { name: '进行中', exact: true }).click();
+    await page.locator('[data-task-filter="running"]').click();
     await page.waitForFunction(() => document.querySelector('.results-card .pagination-total')?.textContent === '共 10 条');
-    await page.locator('.result-filter').getByRole('button', { name: '失败', exact: true }).click();
+    await page.locator('[data-task-filter="failed"]').click();
     await page.getByRole('button', { name: '重试失败', exact: true }).evaluate(button => { button.click(); button.click(); });
     await page.getByText('已将 2 个失败任务加入队列', { exact: true }).waitFor();
     await page.waitForFunction(() => document.querySelectorAll('.result-row').length === 1);
     assert.equal(await page.getByRole('button', { name: '重试失败', exact: true }).isDisabled(), true);
-    await page.locator('.result-filter').getByRole('button', { name: '队列中', exact: true }).click();
+    await page.locator('[data-task-filter="queued"]').click();
     await page.getByLabel('任务每页条数', { exact: true }).selectOption('50');
     await page.waitForFunction(() => document.querySelectorAll('.result-row').length === 14);
+    await assertCounts({ all: 25, running: 10, queued: 14, success: 0, failed: 1, cancelled: 0 });
     assert.equal(calls.filter(call => call.email === 'bulk-fixture-0@example.com').length, 1);
     assert.equal(calls.filter(call => call.email === 'bulk-fixture-1@example.com').length, 1);
     await page.locator('.results-card').evaluate(el => el.scrollIntoView({ block: 'start' }));
     await page.screenshot({ path: 'output/playwright/retry-waiting-queue.png', animations: 'disabled' });
     releaseBulk = true;
     await page.getByText('24 成功 · 1 失败 · 0 取消', { exact: true }).waitFor();
+    await assertCounts({ all: 25, running: 0, queued: 0, success: 24, failed: 1, cancelled: 0 });
     assert.deepEqual(calls.filter(call => call.email === 'bulk-fixture-0@example.com').map(call => call.action), ['rotate', 'rotate']);
     assert.deepEqual(calls.filter(call => call.email === 'bulk-fixture-1@example.com').map(call => call.action), ['rotate', 'verify']);
     assert.equal(calls.filter(call => call.email === 'bulk-fixture-2@example.com').length, 1);
@@ -445,12 +491,12 @@ async function main() {
     await fallbackPage.getByRole('alertdialog').waitFor();
     const fallback = await fallbackPage.getByRole('alertdialog').evaluate(panel => ({
       mode: panel.dataset.glassMode,
-      filter: getComputedStyle(panel).backdropFilter,
+      filter: getComputedStyle(panel.querySelector('.glass-warp')).backdropFilter,
     }));
     assert.equal(fallback.mode, undefined);
     assert(fallback.filter.includes('blur(') && !fallback.filter.includes('url('));
     await fallbackPage.emulateMedia({ forcedColors: 'active' });
-    await fallbackPage.waitForFunction(() => getComputedStyle(document.querySelector('.glass-dialog')).backdropFilter === 'none');
+    await fallbackPage.waitForFunction(() => getComputedStyle(document.querySelector('.glass-warp')).display === 'none');
     await fallbackPage.getByRole('button', { name: '返回检查', exact: true }).click();
     await fallbackPage.close();
     const inspectStorage = target => target.evaluate(() => new Promise((resolve, reject) => {
@@ -506,15 +552,16 @@ async function main() {
     await page.getByRole('button', { name: '开始更换', exact: true }).waitFor();
     assert.equal(await savedCard.count(), 0);
     assert.deepEqual((await inspectStorage(page)).results, [], 'Cleared results must not return after reload');
+    await assertCounts({ all: 0, running: 0, queued: 0, success: 0, failed: 0, cancelled: 0 });
     assert.equal(calls.length, callsBeforeClear, 'Clear/reload must never submit account jobs');
     assert.deepEqual(errors, []);
     console.log(JSON.stringify({ passed: true, maximum, pollBatch: Math.max(...pollWidths), cancelCalls,
       lostRetryResponseRecoveredWithoutReplay: true, duplicateRetryClickIgnored: true,
       successfulTxtRows: rows.length, stageProgressVerified: true, independentPagination: true,
-      taskControlsSeparatedAcrossThemesAndWidths: true,
+      taskControlsSeparatedAcrossThemesAndWidths: true, taskCountsAcrossPaginationAndRetries: true,
       pageSizes: [10, 20, 50], clampedAfterDeletion: true, closeIconCentered: true,
       savedSelectionAcrossPages: true, selectedExportRows: selectedLines.length, bannerTextAndIconsCentered: true,
-      selectAllAcrossPages: true, svgRefractionMaterial: true, reducedMotionGlintDisabled: true,
+      selectAllAcrossPages: true, svgRefractionMaterial: true, actualRefractionPixelsChanged: true, reducedMotionGlintDisabled: true,
       unsupportedEngineFallback: true, forcedColorsFallback: true,
       refreshRetainsResults: true, confirmedClearAll: true, failedClearAtomic: true, encryptionKeyAndAppearanceRetained: true,
       transparentGlassDialog: true, runningAndWaitingFilters: true, bulkRetryJoinedSharedQueue: true,

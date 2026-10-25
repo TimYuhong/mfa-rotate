@@ -1,15 +1,22 @@
 {
   "component": "DialogGlass",
-  "upstream": "https://github.com/DavidHDev/react-bits",
-  "commit": "e12c22192ac7b4b452c5e2feb9b586d74765d696",
-  "path": "src/ts-tailwind/Components/GlassSurface/GlassSurface.tsx",
-  "license": "MIT + Commons Clause License Condition v1.0",
-  "license_file": "public/assets/licenses/react-bits.txt",
+  "upstream": "https://github.com/rdev/liquid-glass-react",
+  "commit": "ac48eab18d1f7f444ae30002d240cae29c863a21",
+  "version": "1.1.1",
+  "paths": ["src/index.tsx", "src/utils.ts"],
+  "license": "MIT",
+  "license_file": "public/assets/licenses/liquid-glass-react.txt",
+  "asset": {
+    "file": "public/assets/liquid-glass-displacement.jpg",
+    "source": "src/utils.ts: displacementMap",
+    "sha256": "6945d824fd543cb4bb080cf5a58460f29b17a661719ca10ccc718d953bfd7af6"
+  },
   "adaptations": [
-    "SVG refraction map and RGB displacement pipeline only; no WebGL, canvas capture or shape processing",
-    "Material attaches to existing Radix dialog; no replacement of accessible interaction primitives",
-    "Reduced distortion and color separation; local white/dark material and 28px optical rim",
-    "Offset dimensions for resize stability; unsupported browsers use CSS frosted-glass fallback",
-    "Event-driven pointer specular sheen only while open; respects reduced motion and cleans up observers/events"
+    "Reuse upstream GlassFilter edge mask, clean-center composition, RGB displacement and standard displacementMap without Canvas or WebGL",
+    "Extract the original embedded JPEG into a same-origin static asset; enable refraction only after that image loads",
+    "Apply the filter to a noninteractive backdrop layer so Radix content, focus and layout stay sharp and stable",
+    "Use restrained displacement 38 and aberration intensity 0.65, project white/dark tint, existing 28px radius and transparent overlay",
+    "Retain pointer-directed rim highlights without upstream content elasticity or absolute centering transforms",
+    "Add ResizeObserver and media/visibility cleanup; unsupported browsers use a readable frosted fallback"
   ]
 }
