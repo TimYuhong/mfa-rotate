@@ -3,21 +3,25 @@
   "upstream": "https://github.com/rdev/liquid-glass-react",
   "commit": "ac48eab18d1f7f444ae30002d240cae29c863a21",
   "version": "1.1.1",
-  "paths": ["src/index.tsx", "src/utils.ts"],
+  "paths": ["src/index.tsx", "src/shader-utils.ts"],
+  "mode": "shader",
+  "generation": {"max_width": 512, "max_height": 320, "when": "mount and layout resize only", "channels": "R for X; B equals G for Y"},
   "license": "MIT",
   "license_file": "public/assets/licenses/liquid-glass-react.txt",
-  "asset": {
+  "historical_reference_asset": {
     "file": "public/assets/liquid-glass-prominent.png",
     "source": "src/utils.ts: prominentDisplacementMap",
     "sha256": "fc47a374f5f4a2113abea6ecaf9657080dbc6b96afb4917bc8c654d52cad9f32"
   },
   "adaptations": [
-    "Reuse upstream GlassFilter edge mask, clean-center composition, RGB displacement and prominentDisplacementMap without Canvas or WebGL",
-    "Extract the original embedded PNG into a same-origin static asset; stretch the map to the complete dialog bounds and enable refraction only after it loads",
+    "Reuse upstream GlassFilter RGB displacement plus ShaderDisplacementGenerator and fragmentShaders.liquidGlass from shader-utils.ts; retain the shuding/liquid-glass attribution",
+    "Generate a correctly encoded RGB displacement PNG matching each surface aspect ratio, at most 512 by 320; never animate or attach the temporary Canvas",
+    "The historical prominent map encodes Y in G while the SVG filter reads B; the active shader map explicitly copies G into B, restoring both displacement axes",
     "Apply the filter to a noninteractive backdrop layer so Radix content, focus and layout stay sharp and stable",
-    "Use displacement 52 and aberration intensity 0.85, reduce opaque white/dark tint to reveal the moving backdrop, retain 28px radius and clear overlay",
+    "Use upstream default displacement 70 with restrained aberration 0.3 for dialogs; scale down to 36/0.2 for the smaller pagination menus to avoid rainbow fringes",
+    "Keep a nearly sharp 0.8px refracting edge and add a separately feathered 12px readability core (8px in menus), instead of blurring the whole lens; retain dialog geometry and clear overlay",
     "Add one project CSS conic-gradient rim orbit, clipped to a 1.4px border; pause on hidden/reduced-motion and unmount with the dialog",
-    "Retain pointer-directed rim highlights without upstream content elasticity or absolute centering transforms",
+    "Adapt upstream pointer elasticity to the optical layer only: at most 2px translation, 1.8 percent stretch and 17 percent displacement response; text, focus targets and controls never move",
     "Add ResizeObserver and media/visibility cleanup; unsupported browsers use a readable frosted fallback"
   ]
 }

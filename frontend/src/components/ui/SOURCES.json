@@ -3,6 +3,18 @@
   "license": "MIT",
   "components": [
     {
+      "component": "dropdown-menu",
+      "url": "https://ui.shadcn.com/r/styles/new-york/dropdown-menu.json",
+      "registry_sha256": "dbd4c0a23be34f2709108597c992528659df65c39b7a0afd17e1701d3ea5c361",
+      "local_file": "src/components/ui/dropdown-menu.tsx",
+      "runtime": "@radix-ui/react-dropdown-menu@2.1.15; React 19.1.0",
+      "customizations": [
+        "Copy only Root, Trigger, Content, RadioGroup and RadioItem wrappers; project-relative imports",
+        "Business pagination uses modal=false to retain native background scrolling and RadioGroup for 10/20/50 choices",
+        "Shared source-verified glass material behind menu controls, scoped 44px items and collision padding"
+      ]
+    },
+    {
       "component": "switch",
       "url": "https://ui.shadcn.com/r/styles/new-york/switch.json",
       "local_file": "src/components/ui/switch.tsx",

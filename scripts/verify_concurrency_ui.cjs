@@ -18,6 +18,11 @@ async function main() {
     await page.getByRole('button', { name: '关闭提示', exact: true }).click();
     await page.locator('[data-feedback-dialog]').waitFor({ state: 'detached' });
   };
+  const choosePageSize = async (label, value) => {
+    await page.getByRole('button', { name: label, exact: true }).click();
+    await page.getByRole('menuitemradio', { name: `${value} 条`, exact: true }).click();
+    await page.getByRole('menu').waitFor({ state: 'detached' });
+  };
   const assertCounts = async expected => {
     await page.waitForFunction(values => Object.entries(values).every(([category, value]) =>
       document.querySelector(`[data-task-filter="${category}"] .filter-count`)?.textContent === String(value)), expected);
@@ -112,6 +117,42 @@ async function main() {
   try {
     await page.goto(site);
     await assertCounts({ all: 0, running: 0, queued: 0, success: 0, failed: 0, cancelled: 0 });
+    const sizeTrigger = page.getByRole('button', { name: '任务每页条数', exact: true });
+    await sizeTrigger.focus();
+    await page.keyboard.press('ArrowDown');
+    await page.getByRole('menu').waitFor();
+    await page.waitForFunction(() => document.querySelector('.glass-menu')?.dataset.glassMode === 'lens');
+    assert.equal(await page.getByRole('menuitemradio').count(), 3);
+    assert.equal(await page.getByRole('menuitemradio', { name: '10 条', exact: true }).getAttribute('aria-checked'), 'true');
+    assert.equal(await page.evaluate(() => document.body.getAttribute('data-scroll-locked')), null);
+    await page.getByRole('menu').screenshot({ path: 'output/playwright/glass-page-menu-light.png', animations: 'disabled' });
+    await page.waitForFunction(() => document.activeElement?.getAttribute('role') === 'menuitemradio' && document.activeElement.textContent.trim() === '10 条');
+    await page.keyboard.press('ArrowDown');
+    await page.waitForFunction(() => document.activeElement?.getAttribute('role') === 'menuitemradio' && document.activeElement.textContent.trim() === '20 条');
+    await page.keyboard.press('Enter');
+    await page.getByRole('menu').waitFor({ state: 'detached' });
+    assert.equal(await sizeTrigger.innerText(), '20 条');
+    await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '任务每页条数');
+    await choosePageSize('任务每页条数', 10);
+    await page.getByRole('button', { name: '深色', exact: true }).click();
+    await page.setViewportSize({ width: 375, height: 812 });
+    await sizeTrigger.click();
+    await page.waitForFunction(() => {
+      const panel = document.querySelector('.glass-menu'), box = panel?.getBoundingClientRect();
+      return box && box.left >= 11 && box.right <= innerWidth - 11 && box.top >= 11 && box.bottom <= innerHeight - 11 && panel.dataset.glassMode === 'lens';
+    });
+    await page.getByRole('menu').evaluate(panel => Promise.all(panel.getAnimations().map(animation => animation.finished)));
+    assert((await page.getByRole('menuitemradio').evaluateAll(items => items.map(item => item.getBoundingClientRect().height))).every(height => height >= 44));
+    await page.getByRole('menu').screenshot({ path: 'output/playwright/glass-page-menu-dark.png', animations: 'disabled' });
+    const menuScroll = await page.evaluate(() => scrollY);
+    await page.mouse.move(8, 200);
+    await page.mouse.wheel(0, -180);
+    await page.waitForFunction(previous => scrollY < previous - 50, menuScroll);
+    await page.keyboard.press('Escape');
+    await page.getByRole('menu').waitFor({ state: 'detached' });
+    assert.equal(await sizeTrigger.innerText(), '10 条');
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.getByRole('button', { name: '纯白', exact: true }).click();
     await page.getByRole('tab', { name: '批量导入', exact: true }).click();
     await page.getByLabel('批量账号', { exact: true }).fill(Array.from({ length: 25 }, (_, i) => `fixture-${i}@example.com---fake-password---JBSWY3DPEHPK3PXP`).join('\n'));
     await page.getByRole('checkbox').check();
@@ -129,12 +170,29 @@ async function main() {
       source: panel.dataset.glassSource,
       radius: getComputedStyle(panel).borderRadius,
       displacement: panel.querySelector('feImage')?.getAttribute('href'),
+      mapMode: panel.dataset.glassMap,
       canvasCount: panel.querySelectorAll('canvas').length,
       background: getComputedStyle(panel.querySelector('.glass-tint')).backgroundImage,
     }));
-    assert(lens.filter.includes('url(') && lens.radius === '28px' && lens.displacement === '/assets/liquid-glass-prominent.png', 'Pinned upstream SVG lens is active');
+    assert(lens.filter.includes('url(') && lens.radius === '28px' && lens.displacement?.startsWith('data:image/png') && lens.mapMode === 'shader', 'Pinned upstream shader SVG lens is active');
     assert.equal(lens.source, 'rdev/liquid-glass-react');
-    assert.equal(lens.canvasCount, 0, 'No WebGL/canvas renderer');
+    assert.equal(lens.canvasCount, 0, 'No continuous or attached Canvas renderer');
+    const mapChannels = await page.locator('.glass-dialog').evaluate(async panel => {
+      const image = new Image();
+      image.src = panel.querySelector('feImage').getAttribute('href');
+      await image.decode();
+      const canvas = document.createElement('canvas'); canvas.width = image.width; canvas.height = image.height;
+      const context = canvas.getContext('2d'); context.drawImage(image, 0, 0);
+      const data = context.getImageData(0, 0, image.width, image.height).data;
+      let redMin = 255, redMax = 0, blueMin = 255, blueMax = 0, compatible = true;
+      for (let i = 0; i < data.length; i += 4) {
+        redMin = Math.min(redMin, data[i]); redMax = Math.max(redMax, data[i]);
+        blueMin = Math.min(blueMin, data[i + 2]); blueMax = Math.max(blueMax, data[i + 2]);
+        compatible &&= data[i + 1] === data[i + 2];
+      }
+      return { width: image.width, height: image.height, redRange: redMax - redMin, blueRange: blueMax - blueMin, compatible };
+    });
+    assert(mapChannels.width <= 512 && mapChannels.height <= 320 && mapChannels.redRange > 80 && mapChannels.blueRange > 80 && mapChannels.compatible, JSON.stringify(mapChannels));
     assert.notEqual(lens.background, 'none', 'Optical material must not be replaced by an opaque OS fallback');
     await page.getByRole('alertdialog').evaluate(panel => Promise.all(panel.getAnimations().map(animation => animation.finished)));
     const overflow = await page.getByRole('alertdialog').evaluate(panel => ({
@@ -155,11 +213,16 @@ async function main() {
     });
     await page.waitForFunction(previous => getComputedStyle(document.querySelector('.glass-rim-flow'), '::before').transform !== previous, rimTransform);
     const panelBox = await page.getByRole('alertdialog').boundingBox();
+    const opticalScale = await page.locator('.glass-dialog feDisplacementMap').first().getAttribute('scale');
     await page.mouse.move(panelBox.x + panelBox.width * 0.7, panelBox.y + panelBox.height * 0.3);
     await page.waitForFunction(() => parseFloat(document.querySelector('.glass-dialog').style.getPropertyValue('--glass-light-x')) > 60);
+    assert(Number(await page.locator('.glass-dialog feDisplacementMap').first().getAttribute('scale')) > Number(opticalScale), 'The optical layer responds to pointer position');
+    const stablePanel = await page.getByRole('alertdialog').boundingBox();
+    assert(Math.abs(stablePanel.x - panelBox.x) < 1 && Math.abs(stablePanel.y - panelBox.y) < 1, 'Optics must not move controls');
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.waitForFunction(() => document.querySelector('.glass-dialog').style.getPropertyValue('--glass-light-x') === '25%');
     assert.equal(await page.locator('.glass-rim-flow').evaluate(rim => getComputedStyle(rim, '::before').animationName), 'none');
+    assert.equal(await page.locator('.glass-dialog').evaluate(panel => panel.style.getPropertyValue('--glass-flow-x')), '0px');
     await page.mouse.move(panelBox.x + panelBox.width * 0.9, panelBox.y + panelBox.height * 0.5);
     assert.equal(await page.locator('.glass-dialog').evaluate(panel => panel.style.getPropertyValue('--glass-light-x')), '25%');
     const refracted = await page.getByRole('alertdialog').screenshot({ animations: 'disabled' });
@@ -305,11 +368,11 @@ async function main() {
     await page.getByText('更换前失败 · 旧密钥未变更', { exact: true }).waitFor();
     await page.getByText('更换后验证失败 · 仅重试验证', { exact: true }).waitFor();
     const savedCard = page.locator('.saved-card');
-    await page.getByLabel('结果每页条数', { exact: true }).selectOption('50');
+    await choosePageSize('结果每页条数', 50);
     await page.getByRole('checkbox', { name: '选择已保存结果 fixture-1@example.com', exact: true }).check();
     assert.equal(await savedCard.getByRole('button', { name: '导出选中 TXT（0）', exact: true }).isDisabled(), true);
     await savedCard.getByRole('button', { name: '取消选择（1）', exact: true }).click();
-    await page.getByLabel('结果每页条数', { exact: true }).selectOption('10');
+    await choosePageSize('结果每页条数', 10);
     await page.getByRole('button', { name: '失败重试 fixture-0@example.com', exact: true }).click();
     await page.getByRole('button', { name: '确认并开始', exact: true }).click();
     await page.getByRole('button', { name: '核对状态 fixture-0@example.com', exact: true }).click();
@@ -327,13 +390,13 @@ async function main() {
     await page.locator('[data-task-filter="success"]').click();
     await page.waitForFunction(() => document.querySelectorAll('.result-row').length === 10);
     assert.equal((await page.getByRole('progressbar').evaluateAll(bars => bars.every(bar => bar.getAttribute('aria-valuenow') === '100'))), true);
-    await page.getByLabel('任务每页条数', { exact: true }).selectOption('20');
+    await choosePageSize('任务每页条数', 20);
     await page.waitForFunction(() => document.querySelectorAll('.result-row').length === 20);
     await taskPager.getByRole('button', { name: '下一页', exact: true }).click();
     await page.waitForFunction(() => document.querySelectorAll('.result-row').length === 3);
-    await page.getByLabel('任务每页条数', { exact: true }).selectOption('50');
+    await choosePageSize('任务每页条数', 50);
     await page.waitForFunction(() => document.querySelectorAll('.result-row').length === 23);
-    await page.getByLabel('任务每页条数', { exact: true }).selectOption('10');
+    await choosePageSize('任务每页条数', 10);
     await page.waitForFunction(() => document.querySelectorAll('.result-row').length === 10);
     const downloadPromise = page.waitForEvent('download');
     await page.locator('.result-filter').getByRole('button', { name: '导出成功 TXT', exact: true }).click();
@@ -417,11 +480,11 @@ async function main() {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await savedCard.getByRole('button', { name: '取消选择（1）', exact: true }).click();
     await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.getByLabel('结果每页条数', { exact: true }).selectOption('20');
+    await choosePageSize('结果每页条数', 20);
     await page.waitForFunction(() => document.querySelectorAll('.saved-entry').length === 20);
-    await page.getByLabel('结果每页条数', { exact: true }).selectOption('50');
+    await choosePageSize('结果每页条数', 50);
     await page.waitForFunction(() => document.querySelectorAll('.saved-entry').length === 23);
-    await page.getByLabel('结果每页条数', { exact: true }).selectOption('10');
+    await choosePageSize('结果每页条数', 10);
     await savedPager.getByRole('button', { name: '下一页', exact: true }).click();
     await savedPager.getByRole('button', { name: '下一页', exact: true }).click();
     await page.waitForFunction(() => document.querySelectorAll('.saved-entry').length === 3);
@@ -489,7 +552,7 @@ async function main() {
     await page.waitForFunction(() => document.querySelectorAll('.result-row').length === 1);
     assert.equal(await page.getByRole('button', { name: '重试失败', exact: true }).isDisabled(), true);
     await page.locator('[data-task-filter="queued"]').click();
-    await page.getByLabel('任务每页条数', { exact: true }).selectOption('50');
+    await choosePageSize('任务每页条数', 50);
     await page.waitForFunction(() => document.querySelectorAll('.result-row').length === 14);
     await assertCounts({ all: 25, running: 10, queued: 14, success: 0, failed: 1, cancelled: 0 });
     assert.equal(calls.filter(call => call.email === 'bulk-fixture-0@example.com').length, 1);
@@ -635,7 +698,7 @@ async function main() {
       lostRetryResponseRecoveredWithoutReplay: true, duplicateRetryClickIgnored: true,
       successfulTxtRows: rows.length, stageProgressVerified: true, independentPagination: true,
       taskControlsSeparatedAcrossThemesAndWidths: true, taskCountsAcrossPaginationAndRetries: true,
-      pageSizes: [10, 20, 50], clampedAfterDeletion: true, closeIconCentered: true,
+      pageSizes: [10, 20, 50], glassPageSizeMenu: true, menuKeyboardAndFocus: true, menuBackgroundScroll: true, clampedAfterDeletion: true, closeIconCentered: true,
       savedSelectionAcrossPages: true, selectedExportRows: selectedLines.length, glassFeedbackInsteadOfBanner: true,
       selectAllAcrossPages: true, compactSavedToolbar: true, processingAccentReducedAndHidden: true, svgRefractionMaterial: true, actualRefractionPixelsChanged: true, reducedMotionGlintDisabled: true,
       unsupportedEngineFallback: true, forcedColorsFallback: true,

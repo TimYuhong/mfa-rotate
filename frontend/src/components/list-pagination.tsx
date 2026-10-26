@@ -1,5 +1,7 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "./ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "./ui/dropdown-menu";
+import { DialogGlass } from "./dialog-glass";
 import type { PageSize } from "../list-page";
 
 type Props = {
@@ -12,21 +14,28 @@ type Props = {
   onPageSizeChange: (size: PageSize) => void;
 };
 
-// Business pagination composed from the existing shadcn Button and native select.
+// Business pagination: Radix owns the nonmodal radio menu and keyboard/focus behavior.
 export function ListPagination({ label, page, pageSize, pageCount, total, onPageChange, onPageSizeChange }: Props) {
   return (
     <nav className="list-pagination" aria-label={`${label}分页`}>
       <span className="pagination-total">共 {total} 条</span>
       <div className="pagination-controls">
-        <label className="page-size">
+        <div className="page-size">
           <span>每页</span>
-          <select value={pageSize} aria-label={`${label}每页条数`}
-            onChange={event => onPageSizeChange(Number(event.target.value) as PageSize)}>
-            <option value={10}>10 条</option>
-            <option value={20}>20 条</option>
-            <option value={50}>50 条</option>
-          </select>
-        </label>
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="page-size-trigger" aria-label={`${label}每页条数`} aria-description={`当前 ${pageSize} 条`}>
+                <span>{pageSize} 条</span><ChevronDown size={14} aria-hidden="true" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="glass-menu" aria-label={`${label}每页条数选项`} align="end" sideOffset={8} collisionPadding={12}>
+              <DialogGlass variant="menu" />
+              <DropdownMenuRadioGroup value={String(pageSize)} onValueChange={value => onPageSizeChange(Number(value) as PageSize)}>
+                {[10, 20, 50].map(value => <DropdownMenuRadioItem key={value} value={String(value)}>{value} 条</DropdownMenuRadioItem>)}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
         <div className="page-navigation">
           <Button variant="plain" size="icon" aria-label="上一页" disabled={page <= 1}
             onClick={() => onPageChange(page - 1)}><ChevronLeft size={16} /></Button>
