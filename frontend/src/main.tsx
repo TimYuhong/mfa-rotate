@@ -39,6 +39,7 @@ import {
 } from "./components/ui";
 import { Confirm, ClearResultConfirm } from "./components/confirm-rotation";
 import { FeedbackDialog } from "./components/feedback-dialog";
+import { ProcessingAccent } from "./components/processing-accent";
 import { parseLines, parseSingle, type Credential } from "./parser";
 import { credentialText } from "./export";
 import { readCredentialFile } from "./import-file";
@@ -651,7 +652,7 @@ function App() {
         <div className="intro">
           <div className="page-title">
             <span className="title-mark" aria-hidden="true"><KeyRound size={20} /></span>
-            <h1>Keyshift</h1>
+            <div><h1>Keyshift</h1><p className="page-caption">2FA 密钥更换</p></div>
           </div>
           <div className="appearance-controls">
           <SnowControl value={lightSnow} onChange={setLightSnow} />
@@ -729,7 +730,7 @@ function App() {
           <div className="left-column">
           <Card className="input-card">
             <div className="card-title">
-              <h2>导入账号</h2>
+              <h2 className="import-title"><span className="section-mark" aria-hidden="true"><KeyRound size={16} /></span>导入账号</h2>
               <span className="concurrency-note">最多 {proxyPool.limit} 并发</span>
             </div>
             <Tabs value={tab} onValueChange={setTab}>
@@ -845,8 +846,9 @@ function App() {
           <ProxyPoolCard pool={proxyPool} busy={busy} onDialogChange={setProxyDialogOpen} />
           </div>
           <div className="right-column">
-            <Card className="results-card">
+            <Card className="results-card" data-processing={busy ? "true" : undefined}>
               <div className="card-title">
+                {busy && <ProcessingAccent />}
                 <h2 className="results-title"><span className={`activity-dot ${busy ? "active" : success ? "done" : ""}`} aria-hidden="true" />处理结果</h2>
                 {rows.length > 0 && (
                   <span className="result-summary">{success} 成功 · {failures} 失败 · {cancelledCount} 取消</span>
@@ -858,7 +860,7 @@ function App() {
                 )}
               </div>
               <div className="result-filter">
-                <div>
+                <div role="group" aria-label="任务筛选">
                   {([
                     ["all", "全部"],
                     ["running", "进行中"],
@@ -905,13 +907,13 @@ function App() {
                   </div>
                 ) : (
                   taskPage.items.map((r) => (
-                    <article className="result-row" key={r.id}>
+                    <article className="result-row" data-category={taskCategory(r)} key={r.id}>
                       <div className="row-heading">
                         <span
                           className={
                             r.outcome === "success"
                               ? "status-dot success"
-                              : "status-dot"
+                              : r.outcome === "failed" ? "status-dot failed" : "status-dot"
                           }
                         >
                           {r.outcome === "success" ? (
@@ -976,8 +978,6 @@ function App() {
                 pageSize={taskPage.pageSize} total={taskPage.total}
                 onPageChange={taskPage.setPage} onPageSizeChange={taskPage.setPageSize} />
             </Card>
-          </div>
-        </div>
         {saved.length > 0 && (
           <Card className="saved-card" ref={savedCardRef} tabIndex={-1}>
             <div className="card-title">
@@ -987,7 +987,7 @@ function App() {
                   <span className="count">{saved.length}</span>
                 </h2>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="saved-toolbar">
                 <Button ref={clearAllButtonRef} variant="plain" className="clear-saved" disabled={busy || clearingSaved}
                   title={busy ? "请先结束本页任务" : "清空本浏览器保存的全部结果"} onClick={() => setConfirmClearAll(true)}>
                   {clearingSaved ? <LoaderCircle size={16} className="spin" /> : <Trash2 size={16} />} 清空结果
@@ -999,7 +999,7 @@ function App() {
                 {selectedSavedRecords.length > 0 && <Button variant="plain" onClick={() => setSelectedSaved([])}>
                   取消选择（{selectedSavedRecords.length}）
                 </Button>}
-                <Button variant="plain" disabled={!savedExportRecords.some(r => r.state === "verified")} onClick={() => download(savedExportRecords)}>
+                <Button variant="plain" className="saved-export" disabled={!savedExportRecords.some(r => r.state === "verified")} onClick={() => download(savedExportRecords)}>
                   <Download size={16} /> {selectedSavedRecords.length ? `导出选中 TXT（${savedExportRecords.filter(r => r.state === "verified").length}）` : "导出成功 TXT"}
                 </Button>
               </div>
@@ -1067,6 +1067,8 @@ function App() {
               onPageChange={savedPage.setPage} onPageSizeChange={savedPage.setPageSize} />
           </Card>
         )}
+          </div>
+        </div>
       </main>
       <FeedbackDialog open={Boolean(error || notice) && !confirm && !confirmClearAll && !clearCandidate && !proxyDialogOpen}
         message={error || notice} error={Boolean(error)} onClose={() => { setError(""); setNotice(""); }} />

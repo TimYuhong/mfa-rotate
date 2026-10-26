@@ -1,0 +1,15 @@
+{
+  "component": "ProcessingAccent",
+  "upstream": "https://github.com/magicuidesign/magicui",
+  "commit": "efe76fc5755eca1142dd4f74c1d6f0ace2887e3c",
+  "paths": ["apps/www/registry/magicui/shine-border.tsx", "apps/www/registry/registry-ui.ts: shine-border"],
+  "license": "MIT",
+  "license_file": "public/assets/licenses/magic-ui.txt",
+  "dependencies": "React and project CSS; no new packages",
+  "adaptations": [
+    "Retain upstream radial gradient, content-box mask and shine keyframes; scope the accent to the task toolbar while tasks run",
+    "Use the existing semantic detail color, fixed 1px border and 14s duration",
+    "Use project CSS instead of registry-generated utility classes; retain existing Radix controls",
+    "Pause offscreen and hidden; disable animation for reduced motion and hide decoration in forced colors"
+  ]
+}

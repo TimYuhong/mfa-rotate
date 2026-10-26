@@ -259,6 +259,18 @@ async function main() {
     await taskPager.getByRole('button', { name: '上一页', exact: true }).click();
     await taskBar('fixture-2@example.com').waitFor();
     assert.equal(await taskBar('fixture-2@example.com').getAttribute('aria-valuenow'), '10');
+    const accent = page.locator('.processing-accent');
+    await page.locator('.results-card > .card-title').scrollIntoViewIfNeeded();
+    await page.waitForFunction(() => document.querySelector('.processing-accent')?.dataset.paused === 'false');
+    assert.equal(await accent.getAttribute('aria-hidden'), 'true');
+    assert.equal(await accent.evaluate(el => getComputedStyle(el).animationName), 'processing-shine');
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    assert.equal(await accent.evaluate(el => getComputedStyle(el).animationName), 'none');
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, value: true }); document.dispatchEvent(new Event('visibilitychange')); });
+    await page.waitForFunction(() => document.querySelector('.processing-accent')?.dataset.paused === 'true');
+    await page.evaluate(() => { delete document.hidden; document.dispatchEvent(new Event('visibilitychange')); scrollTo(0, 0); });
+    await page.waitForFunction(() => document.querySelector('.processing-accent')?.dataset.paused === 'false');
     await page.screenshot({ path: 'output/playwright/task-progress-running-light.png', fullPage: false, animations: 'disabled' });
     await page.getByRole('button', { name: '深色', exact: true }).click();
     await page.setViewportSize({ width: 375, height: 812 });
@@ -392,6 +404,15 @@ async function main() {
     await page.getByRole('button', { name: '深色', exact: true }).click();
     await page.setViewportSize({ width: 375, height: 812 });
     await savedCard.evaluate(el => el.scrollIntoView({ block: 'start' }));
+    for (const width of [320, 375]) {
+      await page.setViewportSize({ width, height: 812 });
+      await page.waitForFunction(() => {
+        const toolbar = document.querySelector('.saved-toolbar');
+        const box = toolbar.getBoundingClientRect();
+        return box.width < innerWidth && box.height <= 100 && [...toolbar.querySelectorAll('button')].every(button => button.scrollWidth <= button.clientWidth + 1);
+      });
+      assert.equal(await savedCard.getByRole('checkbox').first().evaluate(el => getComputedStyle(el).borderRadius), '4px');
+    }
     await page.screenshot({ path: 'output/playwright/saved-selection-mobile-dark.png', animations: 'disabled' });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await savedCard.getByRole('button', { name: '取消选择（1）', exact: true }).click();
@@ -616,7 +637,7 @@ async function main() {
       taskControlsSeparatedAcrossThemesAndWidths: true, taskCountsAcrossPaginationAndRetries: true,
       pageSizes: [10, 20, 50], clampedAfterDeletion: true, closeIconCentered: true,
       savedSelectionAcrossPages: true, selectedExportRows: selectedLines.length, glassFeedbackInsteadOfBanner: true,
-      selectAllAcrossPages: true, svgRefractionMaterial: true, actualRefractionPixelsChanged: true, reducedMotionGlintDisabled: true,
+      selectAllAcrossPages: true, compactSavedToolbar: true, processingAccentReducedAndHidden: true, svgRefractionMaterial: true, actualRefractionPixelsChanged: true, reducedMotionGlintDisabled: true,
       unsupportedEngineFallback: true, forcedColorsFallback: true,
       refreshRetainsResults: true, refreshExportsCompleteCredentials: true, encryptedPasswordBackfill: true, backgroundWheelScrollWithDialog: true,
       confirmedClearAll: true, failedClearAtomic: true, encryptionKeyAndAppearanceRetained: true,

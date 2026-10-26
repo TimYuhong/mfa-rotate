@@ -8,6 +8,7 @@
 | Radix UI | 使用 npm 锁定包；按对应包的许可使用 |
 | Lucide React / 钥匙标识 | `lucide-react` v0.511.0；ISC，SVG 中保留声明 |
 | DialogGlass 的折射实现及位移图 | `rdev/liquid-glass-react` v1.1.1，固定提交及定制见 `frontend/src/components/GLASS-SOURCE.json`；MIT 原文位于 `frontend/public/assets/licenses/liquid-glass-react.txt` |
+| ProcessingAccent 的任务运行边缘反馈 | Magic UI `ShineBorder`，固定提交及定制见 `frontend/src/components/VISUAL-SOURCES.json`；MIT 原文位于 `frontend/public/assets/licenses/magic-ui.txt` |
 | 协议模块快照 | `vendor/SOURCE.json` 记录源文件与修改后的 SHA-256；不包含原项目账号库、配置或运行数据 |
 
 历史 React Bits 许可文件保留用于来源记录；当前 DialogGlass 材质已替换为上述 MIT 来源。
